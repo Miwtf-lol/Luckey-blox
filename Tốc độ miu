@@ -1,0 +1,544 @@
+--[[
+████████████████████████████████████████████████████████████████
+█  TSUNAMI SPEED HUB - KICK A LUCKY BLOCK                     █
+█  Tính năng: Auto Kick nhanh + Chạy khỏi sóng thần           █
+█  Có bật/tắt tốc độ & thanh trượt điều chỉnh                 █
+████████████████████████████████████████████████████████████████
+--]]
+
+-- Khởi tạo GUI
+local TsunamiSpeed = Instance.new("ScreenGui")
+TsunamiSpeed.Name = "TsunamiSpeedHub"
+TsunamiSpeed.Parent = game.CoreGui
+TsunamiSpeed.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Tạo Arrow Button (dấu mũi tên để mở GUI)
+local ArrowButton = Instance.new("ImageButton")
+ArrowButton.Name = "ArrowButton"
+ArrowButton.Size = UDim2.new(0, 45, 0, 45)
+ArrowButton.Position = UDim2.new(0, 10, 0.5, -22)
+ArrowButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+ArrowButton.BackgroundTransparency = 0.3
+ArrowButton.BorderSizePixel = 0
+ArrowButton.Image = "rbxassetid://6031094678" -- Icon mũi tên
+ArrowButton.ImageColor3 = Color3.fromRGB(0, 255, 255)
+ArrowButton.Parent = TsunamiSpeed
+
+-- Bo góc
+local ArrowUICorner = Instance.new("UICorner")
+ArrowUICorner.CornerRadius = UDim.new(0, 8)
+ArrowUICorner.Parent = ArrowButton
+
+-- Main GUI Frame (sẽ ẩn/hiện khi click arrow)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 320, 0, 400)
+MainFrame.Position = UDim2.new(0, 65, 0.5, -200)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.BackgroundTransparency = 0.1
+MainFrame.Visible = false
+MainFrame.Parent = TsunamiSpeed
+
+local MainUICorner = Instance.new("UICorner")
+MainUICorner.CornerRadius = UDim.new(0, 12)
+MainUICorner.Parent = MainFrame
+
+-- Tạo Stroke (viền) cho MainFrame
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = Color3.fromRGB(0, 200, 255)
+MainStroke.Thickness = 1.5
+MainStroke.Transparency = 0.3
+MainStroke.Parent = MainFrame
+
+-- Tiêu đề
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Name = "TitleLabel"
+TitleLabel.Size = UDim2.new(1, 0, 0, 40)
+TitleLabel.Position = UDim2.new(0, 0, 0, 0)
+TitleLabel.BackgroundColor3 = Color3.fromRGB(0, 180, 255)
+TitleLabel.BackgroundTransparency = 0.7
+TitleLabel.Text = "⚡ TSUNAMI SPEED HUB"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 18
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextStrokeTransparency = 0.5
+TitleLabel.Parent = MainFrame
+
+local TitleUICorner = Instance.new("UICorner")
+TitleUICorner.CornerRadius = UDim.new(0, 12)
+TitleUICorner.Parent = TitleLabel
+
+-- Nút đóng (X)
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -35, 0, 5)
+CloseButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+CloseButton.BackgroundTransparency = 0.4
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 16
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.BorderSizePixel = 0
+CloseButton.Parent = MainFrame
+
+local CloseUICorner = Instance.new("UICorner")
+CloseUICorner.CornerRadius = UDim.new(0, 6)
+CloseUICorner.Parent = CloseButton
+
+-- === KHU VỰC CHỨC NĂNG ===
+local function CreateLabel(parent, text, posY)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -20, 0, 25)
+    label.Position = UDim2.new(0, 10, 0, posY)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(200, 220, 255)
+    label.TextSize = 14
+    label.Font = Enum.Font.GothamSemibold
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = parent
+    return label
+end
+
+local function CreateToggle(parent, text, posY, defaultState, callback)
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, -20, 0, 35)
+    bg.Position = UDim2.new(0, 10, 0, posY)
+    bg.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+    bg.BackgroundTransparency = 0.3
+    bg.BorderSizePixel = 0
+    bg.Parent = parent
+    
+    local bgCorner = Instance.new("UICorner")
+    bgCorner.CornerRadius = UDim.new(0, 6)
+    bgCorner.Parent = bg
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.7, -5, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(220, 220, 255)
+    label.TextSize = 13
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = bg
+    
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 50, 0, 24)
+    toggleBtn.Position = UDim2.new(1, -60, 0.5, -12)
+    toggleBtn.BackgroundColor3 = defaultState and Color3.fromRGB(0, 200, 80) or Color3.fromRGB(80, 80, 80)
+    toggleBtn.Text = defaultState and "BẬT" or "TẮT"
+    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleBtn.TextSize = 11
+    toggleBtn.Font = Enum.Font.GothamBold
+    toggleBtn.BorderSizePixel = 0
+    toggleBtn.Parent = bg
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = toggleBtn
+    
+    local state = defaultState
+    
+    toggleBtn.MouseButton1Click:Connect(function()
+        state = not state
+        toggleBtn.BackgroundColor3 = state and Color3.fromRGB(0, 200, 80) or Color3.fromRGB(80, 80, 80)
+        toggleBtn.Text = state and "BẬT" or "TẮT"
+        if callback then callback(state) end
+    end)
+    
+    return toggleBtn, bg
+end
+
+local function CreateSlider(parent, text, posY, minVal, maxVal, defaultVal, callback)
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, -20, 0, 50)
+    bg.Position = UDim2.new(0, 10, 0, posY)
+    bg.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+    bg.BackgroundTransparency = 0.3
+    bg.BorderSizePixel = 0
+    bg.Parent = parent
+    
+    local bgCorner = Instance.new("UICorner")
+    bgCorner.CornerRadius = UDim.new(0, 6)
+    bgCorner.Parent = bg
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.7, -5, 0, 20)
+    label.Position = UDim2.new(0, 10, 0, 2)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(220, 220, 255)
+    label.TextSize = 13
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = bg
+    
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Size = UDim2.new(0.3, -5, 0, 20)
+    valueLabel.Position = UDim2.new(0.7, 0, 0, 2)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Text = tostring(defaultVal)
+    valueLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
+    valueLabel.TextSize = 14
+    valueLabel.Font = Enum.Font.GothamBold
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+    valueLabel.Parent = bg
+    
+    local sliderBg = Instance.new("Frame")
+    sliderBg.Size = UDim2.new(1, -20, 0, 6)
+    sliderBg.Position = UDim2.new(0, 10, 0, 30)
+    sliderBg.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+    sliderBg.BorderSizePixel = 0
+    sliderBg.Parent = bg
+    
+    local sliderBgCorner = Instance.new("UICorner")
+    sliderBgCorner.CornerRadius = UDim.new(0, 3)
+    sliderBgCorner.Parent = sliderBg
+    
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+    fill.BorderSizePixel = 0
+    fill.Parent = sliderBg
+    
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(0, 3)
+    fillCorner.Parent = fill
+    
+    local drag = Instance.new("TextButton")
+    drag.Size = UDim2.new(0, 18, 0, 18)
+    drag.Position = UDim2.new(fill.Size.X.Scale, fill.Size.X.Offset - 9, -6, 0)
+    drag.BackgroundColor3 = Color3.fromRGB(0, 220, 255)
+    drag.Text = ""
+    drag.BorderSizePixel = 0
+    drag.AutoButtonColor = false
+    drag.Parent = sliderBg
+    
+    local dragCorner = Instance.new("UICorner")
+    dragCorner.CornerRadius = UDim.new(0, 9)
+    dragCorner.Parent = drag
+    
+    local currentVal = defaultVal
+    
+    local function updateSlider(inputPos)
+        local absX = sliderBg.AbsolutePosition.X
+        local absSize = sliderBg.AbsoluteSize.X
+        local relX = math.clamp(inputPos - absX, 0, absSize)
+        local percent = relX / absSize
+        local val = math.floor(minVal + (maxVal - minVal) * percent)
+        if val < minVal then val = minVal end
+        if val > maxVal then val = maxVal end
+        currentVal = val
+        valueLabel.Text = tostring(val)
+        fill.Size = UDim2.new(percent, 0, 1, 0)
+        drag.Position = UDim2.new(percent, -9, -6, 0)
+        if callback then callback(val) end
+    end
+    
+    drag.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            local conn
+            conn = input:GetPropertyChangedSignal("Position"):Connect(function()
+                updateSlider(input.Position.X)
+            end)
+            input:GetPropertyChangedSignal("UserInputState"):Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    if conn then conn:Disconnect() end
+                end
+            end)
+        end
+    end)
+    
+    return sliderBg
+end
+
+-- === BIẾN TRẠNG THÁI ===
+local autoKickEnabled = false
+local autoRunEnabled = false
+local currentSpeed = 50
+local kickConnection = nil
+local runConnection = nil
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+
+-- Hàm tìm RemoteEvent/Function để kick
+local function FindKickRemote()
+    -- Tìm remote kick trong game (thường là RemoteEvent)
+    for _, v in pairs(game:GetDescendants()) do
+        if v:IsA("RemoteEvent") and string.find(string.lower(v.Name), "kick") then
+            return v
+        end
+        if v:IsA("RemoteFunction") and string.find(string.lower(v.Name), "kick") then
+            return v
+        end
+    end
+    -- Thử tìm bằng tên phổ biến
+    local commonNames = {"KickBlock", "Kick", "BlockKick", "RemoteKick", "KickEvent"}
+    for _, name in pairs(commonNames) do
+        local found = game:GetService("ReplicatedStorage"):FindFirstChild(name, true)
+        if found and (found:IsA("RemoteEvent") or found:IsA("RemoteFunction")) then
+            return found
+        end
+    end
+    return nil
+end
+
+-- Hàm tìm Remote để chạy/speed
+local function FindSpeedRemote()
+    for _, v in pairs(game:GetDescendants()) do
+        if v:IsA("RemoteEvent") and (string.find(string.lower(v.Name), "speed") or string.find(string.lower(v.Name), "run")) then
+            return v
+        end
+    end
+    return nil
+end
+
+-- AUTO KICK FUNCTION
+local function StartAutoKick()
+    if kickConnection then kickConnection:Disconnect() kickConnection = nil end
+    
+    local remote = FindKickRemote()
+    if not remote then
+        -- Fallback: simulate spacebar spam
+        kickConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if autoKickEnabled then
+                local char = player.Character
+                if char and char:FindFirstChild("Humanoid") then
+                    -- Thử kick bằng cách mô phỏng hành động
+                    pcall(function()
+                        remote = FindKickRemote()
+                        if remote then
+                            remote:FireServer()
+                        end
+                    end)
+                end
+            end
+        end)
+    else
+        kickConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            if autoKickEnabled then
+                pcall(function()
+                    if remote:IsA("RemoteEvent") then
+                        remote:FireServer()
+                    elseif remote:IsA("RemoteFunction") then
+                        remote:InvokeServer()
+                    end
+                end)
+            end
+        end)
+    end
+end
+
+local function StopAutoKick()
+    if kickConnection then
+        kickConnection:Disconnect()
+        kickConnection = nil
+    end
+end
+
+-- AUTO RUN FROM TSUNAMI FUNCTION
+local function StartAutoRun()
+    if runConnection then runConnection:Disconnect() runConnection = nil end
+    
+    runConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if autoRunEnabled and player.Character then
+            local char = player.Character
+            local humanoid = char:FindFirstChild("Humanoid")
+            local rootPart = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+            
+            if humanoid and rootPart then
+                -- Tìm hướng về base/home (thường là spawn location)
+                local spawns = game:GetService("Workspace"):FindFirstChild("SpawnLocation")
+                or game:GetService("Workspace"):FindFirstChild("Base")
+                or game:GetService("Workspace"):FindFirstChild("Home")
+                or game:GetService("Workspace"):FindFirstChild("Plot")
+                
+                if spawns then
+                    local targetPos = spawns.Position
+                    local direction = (targetPos - rootPart.Position).Unit
+                    
+                    -- Di chuyển về base với tốc độ được điều chỉnh
+                    local speedMult = currentSpeed / 50 -- 50 là mặc định
+                    local moveVector = Vector3.new(direction.X, 0, direction.Z) * speedMult
+                    
+                    humanoid:Move(moveVector)
+                else
+                    -- Fallback: chạy về tọa độ 0,0,0
+                    local targetPos = Vector3.new(0, rootPart.Position.Y, 0)
+                    local direction = (targetPos - rootPart.Position).Unit
+                    local speedMult = currentSpeed / 50
+                    local moveVector = Vector3.new(direction.X, 0, direction.Z) * speedMult
+                    humanoid:Move(moveVector)
+                end
+            end
+        end
+    end)
+end
+
+local function StopAutoRun()
+    if runConnection then
+        runConnection:Disconnect()
+        runConnection = nil
+    end
+end
+
+-- === TẠO GIAO DIỆN ===
+local yPos = 50
+
+-- Dòng trạng thái
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -20, 0, 20)
+statusLabel.Position = UDim2.new(0, 10, 0, yPos)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "🟢 Script đã sẵn sàng!"
+statusLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+statusLabel.TextSize = 12
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.Parent = MainFrame
+yPos = yPos + 25
+
+-- Line separator
+local line1 = Instance.new("Frame")
+line1.Size = UDim2.new(1, -20, 0, 1)
+line1.Position = UDim2.new(0, 10, 0, yPos)
+line1.BackgroundColor3 = Color3.fromRGB(0, 180, 255)
+line1.BackgroundTransparency = 0.5
+line1.BorderSizePixel = 0
+line1.Parent = MainFrame
+yPos = yPos + 10
+
+-- Toggle Auto Kick
+local kickToggle, kickBg = CreateToggle(MainFrame, "⚽ Auto Kick (Đá tự động)", yPos, false, function(state)
+    autoKickEnabled = state
+    if state then
+        StartAutoKick()
+        statusLabel.Text = "⚡ Auto Kick: BẬT"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+    else
+        StopAutoKick()
+        statusLabel.Text = "⏸ Auto Kick: TẮT"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+    end
+end)
+yPos = yPos + 40
+
+-- Toggle Auto Run
+local runToggle, runBg = CreateToggle(MainFrame, "🏃 Chạy khỏi Sóng Thần (Auto)", yPos, false, function(state)
+    autoRunEnabled = state
+    if state then
+        StartAutoRun()
+        statusLabel.Text = "🏃 Chạy: BẬT | Speed: " .. currentSpeed
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+    else
+        StopAutoRun()
+        statusLabel.Text = "⏸ Chạy: TẮT"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+    end
+end)
+yPos = yPos + 40
+
+-- Speed Slider
+local speedSlider = CreateSlider(MainFrame, "🚀 Tốc độ chạy", yPos, 10, 200, 50, function(val)
+    currentSpeed = val
+    if autoRunEnabled then
+        statusLabel.Text = "🏃 Đang chạy | Speed: " .. val
+    end
+end)
+yPos = yPos + 60
+
+-- Line separator
+local line2 = Instance.new("Frame")
+line2.Size = UDim2.new(1, -20, 0, 1)
+line2.Position = UDim2.new(0, 10, 0, yPos)
+line2.BackgroundColor3 = Color3.fromRGB(0, 180, 255)
+line2.BackgroundTransparency = 0.5
+line2.BorderSizePixel = 0
+line2.Parent = MainFrame
+yPos = yPos + 10
+
+-- Thông tin thêm
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Size = UDim2.new(1, -20, 0, 50)
+infoLabel.Position = UDim2.new(0, 10, 0, yPos)
+infoLabel.BackgroundTransparency = 1
+infoLabel.Text = "💡 Mẹo: Bật Auto Kick để tự động đá\nvà Auto Run để tự chạy về base\n🏠 Điều chỉnh Speed để chạy nhanh hơn sóng thần!"
+infoLabel.TextColor3 = Color3.fromRGB(150, 180, 200)
+infoLabel.TextSize = 11
+infoLabel.Font = Enum.Font.Gotham
+infoLabel.TextXAlignment = Enum.TextXAlignment.Left
+infoLabel.Parent = MainFrame
+
+-- === XỬ LÝ SỰ KIỆN ARROW BUTTON (HIỆN/GUI) ===
+local guiVisible = false
+ArrowButton.MouseButton1Click:Connect(function()
+    guiVisible = not guiVisible
+    MainFrame.Visible = guiVisible
+    -- Xoay mũi tên
+    ArrowButton.Rotation = guiVisible and 180 or 0
+end)
+
+CloseButton.MouseButton1Click:Connect(function()
+    guiVisible = false
+    MainFrame.Visible = false
+    ArrowButton.Rotation = 0
+end)
+
+-- Kéo GUI
+local dragging = false
+local dragInput, dragStart, startPos
+
+ArrowButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = ArrowButton.Position
+    end
+end)
+
+ArrowButton.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        ArrowButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        MainFrame.Position = UDim2.new(0, ArrowButton.Position.X.Offset + 55, 0.5, -200)
+    end
+end)
+
+game:GetService("UserInputService").InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- Cập nhật character khi respawn
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    if autoKickEnabled then
+        StopAutoKick()
+        StartAutoKick()
+    end
+    if autoRunEnabled then
+        StopAutoRun()
+        StartAutoRun()
+    end
+end)
+
+-- Thông báo hoàn tất
+print("✅ Tsunami Speed Hub đã được tải thành công!")
+print("⚡ Ấn vào mũi tên ở góc trái màn hình để mở GUI")
+
+-- Thông báo trong game
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "Tsunami Speed Hub",
+    Text = "✅ Đã tải xong! Ấn vào mũi tên trái để mở menu",
+    Duration = 5
+})
