@@ -139,11 +139,27 @@ local function TeleportToIsland(islandName)
 end
 
 -- Hàm lấy danh sách đảo cần tele
-local function GetIslandsToTeleport()
-    local currentIsland = GetCurrentIsland()
-    if not currentIsland then
-        return IslandOrder
+local function IslandTeleportLoop()
+    while Settings.Enabled do
+        task.wait(Settings.TeleportDelay)
+
+        pcall(function()
+            local islands = GetIslandsToTeleport()
+
+            if #islands == 0 then
+                print("✅ Đã ở Common!")
+                Settings.Enabled = false
+                return
+            end
+
+            for _, islandName in ipairs(islands) do
+                if not Settings.Enabled then break end
+                TeleportToIsland(islandName)
+                task.wait(Settings.TeleportDelay)
+            end
+        end)
     end
+end
     
     Settings.CurrentIsland = currentIsland
     
@@ -533,7 +549,8 @@ local function ToggleTeleport()
         ToggleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
         StatusLabel.Text = "⏹ Đã dừng"
         StatusLabel.TextColor3 = Color3.fromRGB(255, 150, 100)
- end
+    end
+end
 
 ToggleBtn.MouseButton1Click:Connect(ToggleTeleport)
 
@@ -581,3 +598,10 @@ _G.MIU_TP_V2 = {
     Minimize = ToggleMinimize,
     Status = function() return Settings.Enabled end
 }
+task.spawn(function()
+    while task.wait(0.5) do
+        if UpdateUI then
+            UpdateUI()
+        end
+    end
+end)
