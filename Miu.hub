@@ -1,330 +1,274 @@
 --[[
-    MIU Hub - Island Teleporter
-    Mở rộng: Auto tele khi biến thành brainrot / động vật
+    MIU Hub - Island Teleporter PRO
+    - Auto tele khi biến thành entity ở các đảo
+    - Phát hiện tên trên đầu để xác định đảo
+    - Thứ tự: Common → Rare → Epic → Legend → Mythic → Godly → Secret → Hacked → OG → Celestial
 ]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-
-local Player = Players.LocalPlayer
+local plr = Players.LocalPlayer
 
 -- Settings
 local Settings = {
     Enabled = false,
-    TeleportDelay = 0.3,
+    CheckInterval = 0.3,
+    TeleportDelay = 0.2,
     CurrentIsland = nil,
-    AutoFindIsland = true,
     
-    -- NEW: Cài đặt cho Brainrot & Animal
-    BrainrotEnabled = true,
-    AnimalEnabled = true,
-    BrainrotTeleportTarget = "Common",      -- Đảo sẽ tele khi biến brainrot
-    AnimalTeleportTarget = "Common",        -- Đảo sẽ tele khi biến động vật
-    CheckInterval = 0.5,                    -- Kiểm tra mỗi 0.5s
-    LastState = {
-        IsBrainrot = false,
-        IsAnimal = false
+    -- Auto TP khi biến hình
+    AutoTPOnTransform = true,
+    
+    -- Danh sách các đảo theo cấp (từ thấp đến cao)
+    IslandTiers = {
+        ["Common"] = 1,
+        ["Rare"] = 2,
+        ["Epic"] = 3,
+        ["Legend"] = 4,
+        ["Mythic"] = 5,
+        ["Godly"] = 6,
+        ["Secret"] = 7,
+        ["Hacked"] = 8,
+        ["OG"] = 9,
+        ["Celestial"] = 10
+    },
+    
+    -- Danh sách tên đảo từ thấp đến cao
+    IslandNames = {"Common", "Rare", "Epic", "Legend", "Mythic", "Godly", "Secret", "Hacked", "OG", "Celestial"},
+    
+    -- Entity keywords cho mỗi đảo (các con vật/entity xuất hiện trên đảo đó)
+    IslandEntities = {
+        Common = {"COMMON", "SLIME", "BUNNY", "CHICKEN", "PIG", "COW", "SHEEP", "BEGGINER", "NOOB", "BABY"},
+        Rare = {"RARE", "WOLF", "FOX", "DEER", "PANDA", "BIRD", "EAGLE"},
+        Epic = {"EPIC", "TIGER", "LION", "BEAR", "GORILLA", "ELEPHANT", "RHINO"},
+        Legend = {"LEGEND", "DRAGON", "PHOENIX", "UNICORN", "GRYPHON", "PEGASUS", "KRAKEN"},
+        Mythic = {"MYTHIC", "DEMON", "ANGEL", "REAPER", "NECROMANCER", "DARK_KNIGHT", "WRAITH"},
+        Godly = {"GODLY", "GOD", "ZEUS", "THOR", "ODIN", "APOLLO", "HERA", "TITAN"},
+        Secret = {"SECRET", "SHADOW", "VOID", "COSMIC", "GALAXY", "NEBULA", "MYSTERY", "HIDDEN"},
+        Hacked = {"HACKED", "HACKER", "GLITCH", "CYBER", "VIRUS", "CORRUPT", "ERROR", "CODE"},
+        OG = {"OG", "ORIGINAL", "VETERAN", "ALPHA", "BETA", "LEGACY", "CLASSIC", "ANCIENT"},
+        Celestial = {"CELESTIAL", "CELEST", "STAR", "MOON", "SUN", "COMET", "ASTRAL", "GALACTIC", "UNIVERSE"}
     }
 }
 
--- Danh sách đảo theo thứ tự từ cao đến thấp
-local IslandOrder = {
-    "Celestial",
-    "OG",
-    "Hacked",
-    "Divine",
-    "Secret",
-    "Godly",
-    "Mythic",
-    "Legend",
-    "Epic",
-    "Rare",
-    "Common"
-}
-
--- Từ khóa mở rộng cho mỗi đảo
-local IslandKeywords = {
-    Celestial = {"CELESTIAL", "CELEST", "CLELESTIAL"},
-    OG = {"OG", "ORIGINAL", "OG ISLAND"},
-    Hacked = {"HACKED", "HACK", "HACKED ISLAND"},
-    Divine = {"DIVINE", "DIVIN", "DIVINE ISLAND"},
-    Secret = {"SECRET", "SECRET ISLAND"},
-    Godly = {"GODLY", "GOD", "GODLY ISLAND"},
-    Mythic = {"MYTHIC", "MYTH", "MYTHIC ISLAND"},
-    Legend = {"LEGEND", "LEGENDARY", "LEGEND ISLAND"},
-    Epic = {"EPIC", "EPIC ISLAND"},
-    Rare = {"RARE", "RARE ISLAND"},
-    Common = {"COMMON", "COMMOM", "SAFE", "SPAWN", "LOBBY"}
-}
-
 -- =====================
--- NEW: Brainrot & Animal Detection
+-- DETECTION ENGINE
 -- =====================
 
--- Từ khóa phát hiện brainrot
-local BrainrotKeywords = {
-    "BRAINROT", "BRAIN_ROT", "BRAINROTED", "ROTTEN", 
-    "ZOMBIE", "UNDEAD", "INFECTED", "MUTATED",
-    "CORRUPTED", "CURSED", "BRAIN", "ROT"
-}
-
--- Từ khóa phát hiện động vật
-local AnimalKeywords = {
-    "ANIMAL", "BEAST", "FURRY", "CAT", "DOG", "WOLF",
-    "FOX", "RABBIT", "BUNNY", "BIRD", "CHICKEN", "COW",
-    "PIG", "SHEEP", "HORSE", "DRAGON", "SNAKE", "FISH",
-    "SHARK", "TIGER", "LION", "BEAR", "PANDA", "MONKEY",
-    "APE", "FROG", "DUCK", "GOOSE"
-}
-
--- Kiểm tra xem nhân vật có đang là brainrot không
-local function IsBrainrot()
-    local char = Player.Character
-    if not char then return false end
+-- Phát hiện tất cả các entity/con vật trên đầu có tên tương ứng với đảo
+local function DetectHeadName()
+    local char = plr.Character
+    if not char then return nil end
     
-    -- Kiểm tra Humanoid
+    -- Kiểm tra HumanoidRootPart hoặc Head
+    local head = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+    if not head then return nil end
+    
+    -- Kiểm tra BillboardGui trên đầu (tên hiển thị trên đầu entity)
+    local billboards = {}
+    for _, child in pairs(head:GetChildren()) do
+        if child:IsA("BillboardGui") or child:IsA("SurfaceGui") then
+            table.insert(billboards, child)
+        end
+    end
+    
+    -- Kiểm tra tất cả descendants
+    for _, desc in pairs(head:GetDescendants()) do
+        if desc:IsA("BillboardGui") or desc:IsA("SurfaceGui") then
+            table.insert(billboards, desc)
+        end
+    end
+    
+    -- Kiểm tra PlayerGui
+    local playerGui = plr:FindFirstChild("PlayerGui")
+    if playerGui then
+        for _, gui in pairs(playerGui:GetDescendants()) do
+            if gui:IsA("BillboardGui") and gui.Adornee == head then
+                table.insert(billboards, gui)
+            end
+        end
+    end
+    
+    -- Đọc tên từ các BillboardGui
+    for _, billboard in pairs(billboards) do
+        for _, child in pairs(billboard:GetChildren()) do
+            if child:IsA("TextLabel") or child:IsA("TextButton") then
+                local text = child.Text or ""
+                local upperText = text:upper():gsub("%s+", "")
+                
+                -- Kiểm tra xem text có chứa tên đảo không
+                for islandName, _ in pairs(Settings.IslandTiers) do
+                    local upperIsland = islandName:upper()
+                    if upperText:find(upperIsland) then
+                        return islandName, text
+                    end
+                end
+                
+                -- Kiểm tra từ khóa mở rộng
+                for islandName, keywords in pairs(Settings.IslandEntities) do
+                    for _, kw in ipairs(keywords) do
+                        if upperText:find(kw) then
+                            return islandName, text
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return nil
+end
+
+-- Kiểm tra toàn bộ cơ thể để phát hiện biến hình
+local function DetectTransformation()
+    local char = plr.Character
+    if not char then return nil end
+    
     local humanoid = char:FindFirstChildWhichIsA("Humanoid")
-    if humanoid then
-        local displayName = humanoid.DisplayName or ""
-        if displayName:upper():find("BRAINROT") or displayName:upper():find("ZOMBIE") then
-            return true
+    if not humanoid then return nil end
+    
+    -- 1. Kiểm tra BillboardGui trên đầu (ưu tiên cao nhất)
+    local islandName, displayText = DetectHeadName()
+    if islandName then
+        return islandName, displayText
+    end
+    
+    -- 2. Kiểm tra tên model nhân vật
+    local charName = char.Name:upper()
+    for islandName, keywords in pairs(Settings.IslandEntities) do
+        for _, kw in ipairs(keywords) do
+            if charName:find(kw) then
+                return islandName, char.Name
+            end
         end
     end
     
-    -- Kiểm tra tên model
-    local name = char.Name:upper()
-    for _, kw in ipairs(BrainrotKeywords) do
-        if name:find(kw) then
-            return true
+    -- 3. Kiểm tra Humanoid.DisplayName
+    local displayName = humanoid.DisplayName or ""
+    local upperDisplay = displayName:upper()
+    for islandName, keywords in pairs(Settings.IslandEntities) do
+        for _, kw in ipairs(keywords) do
+            if upperDisplay:find(kw) then
+                return islandName, displayName
+            end
         end
     end
     
-    -- Kiểm tra các attribute
+    -- 4. Kiểm tra Attributes
     local attrs = char:GetAttributes()
     for key, val in pairs(attrs) do
         local keyStr = tostring(key):upper()
         local valStr = tostring(val):upper()
-        if keyStr:find("BRAIN") or keyStr:find("ROT") or keyStr:find("ZOMBIE") then
-            return true
-        end
-        if valStr:find("BRAINROT") or valStr:find("ZOMBIE") or valStr:find("INFECTED") then
-            return true
+        for islandName, keywords in pairs(Settings.IslandEntities) do
+            for _, kw in ipairs(keywords) do
+                if keyStr:find(kw) or valStr:find(kw) then
+                    return islandName, valStr
+                end
+            end
         end
     end
     
-    -- Kiểm tra accessories/hats (thường dùng để biến hình)
+    -- 5. Kiểm tra Accessories (mũ, vật phẩm trang bị) 
     for _, child in pairs(char:GetChildren()) do
         if child:IsA("Accessory") or child:IsA("Hat") or child:IsA("Tool") then
             local childName = child.Name:upper()
             local handle = child:FindFirstChild("Handle")
             local handleName = handle and handle.Name:upper() or ""
             
-            for _, kw in ipairs(BrainrotKeywords) do
-                if childName:find(kw) or handleName:find(kw) then
-                    return true
+            for islandName, keywords in pairs(Settings.IslandEntities) do
+                for _, kw in ipairs(keywords) do
+                    if childName:find(kw) or handleName:find(kw) then
+                        return islandName, child.Name
+                    end
                 end
             end
         end
     end
     
-    -- Kiểm tra BodyEffects/effects (thường có trong game có hệ thống biến hình)
-    local effects = char:FindFirstChild("BodyEffects") or char:FindFirstChild("Effects")
+    -- 6. Kiểm tra MeshParts và SpecialMesh
+    for _, desc in pairs(char:GetDescendants()) do
+        if desc:IsA("MeshPart") or desc:IsA("SpecialMesh") then
+            local meshName = (desc.Name .. " " .. (desc.MeshId or "")):upper()
+            for islandName, keywords in pairs(Settings.IslandEntities) do
+                for _, kw in ipairs(keywords) do
+                    if meshName:find(kw) then
+                        return islandName, desc.Name
+                    end
+                end
+            end
+        end
+    end
+    
+    -- 7. Kiểm tra Animation đang chơi
+    local animator = humanoid:FindFirstChildWhichIsA("Animator")
+    if animator then
+        for _, track in pairs(animator:GetPlayingAnimationTracks()) do
+            local animName = (track.Animation and track.Animation.Name or ""):upper()
+            local animId = (track.Animation and track.Animation.AnimationId or ""):upper()
+            for islandName, keywords in pairs(Settings.IslandEntities) do
+                for _, kw in ipairs(keywords) do
+                    if animName:find(kw) or animId:find(kw) then
+                        return islandName, track.Animation.Name
+                    end
+                end
+            end
+        end
+    end
+    
+    -- 8. Kiểm tra BodyEffects/Effects
+    local effects = char:FindFirstChild("BodyEffects") or char:FindFirstChild("Effects") or char:FindFirstChild("BodysEffects")
     if effects then
         for _, child in pairs(effects:GetChildren()) do
             local n = child.Name:upper()
-            for _, kw in ipairs(BrainrotKeywords) do
-                if n:find(kw) then return true end
+            for islandName, keywords in pairs(Settings.IslandEntities) do
+                for _, kw in ipairs(keywords) do
+                    if n:find(kw) then return islandName, child.Name end
+                end
             end
         end
     end
     
-    -- Kiểm qua RemoteEvent (nếu game có system gửi sự kiện biến hình)
+    -- 9. Kiểm tra qua RemoteEvent (game-specific)
     for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
         if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
             local rName = remote.Name:upper()
-            if rName:find("BRAIN") or rName:find("TRANSFORM") or rName:find("MORPH") then
-                -- Game có hệ thống biến hình - kiểm tra thêm
-            end
-        end
-    end
-    
-    return false
-end
-
--- Kiểm tra xem nhân vật có đang là động vật không
-local function IsAnimal()
-    local char = Player.Character
-    if not char then return false end
-    
-    -- Kiểm tra Humanoid.DisplayName
-    local humanoid = char:FindFirstChildWhichIsA("Humanoid")
-    if humanoid then
-        local displayName = humanoid.DisplayName or ""
-        for _, kw in ipairs(AnimalKeywords) do
-            if displayName:upper():find(kw) then
-                return true
-            end
-        end
-    end
-    
-    -- Kiểm tra tên model nhân vật
-    local name = char.Name:upper()
-    for _, kw in ipairs(AnimalKeywords) do
-        if name:find(kw) then
-            return true
-        end
-    end
-    
-    -- Kiểm tra attributes
-    local attrs = char:GetAttributes()
-    for key, val in pairs(attrs) do
-        local keyStr = tostring(key):upper()
-        local valStr = tostring(val):upper()
-        if keyStr:find("MORPH") or keyStr:find("ANIMAL") or keyStr:find("TRANSFORM") then
-            return true
-        end
-        if valStr:find("ANIMAL") or valStr:find("MORPH") or valStr:find("BEAST") then
-            return true
-        end
-    end
-    
-    -- Kiểm tra accessories
-    for _, child in pairs(char:GetChildren()) do
-        if child:IsA("Accessory") or child:IsA("Tool") then
-            local childName = child.Name:upper()
-            local handle = child:FindFirstChild("Handle")
-            local handleName = handle and handle.Name:upper() or ""
-            
-            for _, kw in ipairs(AnimalKeywords) do
-                if childName:find(kw) or handleName:find(kw) then
-                    return true
-                end
-            end
-        end
-    end
-    
-    -- Kiểm tra MeshParts/SpecialMesh (thường dùng cho morph)
-    for _, desc in pairs(char:GetDescendants()) do
-        if desc:IsA("MeshPart") or desc:IsA("SpecialMesh") or desc:IsA("BlockMesh") then
-            local meshName = (desc.Name .. " " .. (desc.MeshId or "")):upper()
-            for _, kw in ipairs(AnimalKeywords) do
-                if meshName:find(kw) then
-                    return true
-                end
-            end
-            -- Kiểm tra MeshId URL
-            local meshId = (desc:IsA("SpecialMesh") and desc.MeshId) or (desc:IsA("MeshPart") and desc.MeshId) or ""
-            if meshId ~= "" then
-                for _, kw in ipairs(AnimalKeywords) do
-                    if meshId:upper():find(kw) then
-                        return true
+            for islandName, keywords in pairs(Settings.IslandEntities) do
+                for _, kw in ipairs(keywords) do
+                    if rName:find(kw) then
+                        -- Game có event cho entity này, khả năng cao đã biến hình
+                        return islandName, remote.Name
                     end
                 end
             end
         end
     end
     
-    -- Kiểm tra AnimationTracks đang chạy (animation động vật)
-    if humanoid then
-        local animator = humanoid:FindFirstChildWhichIsA("Animator")
-        if animator then
-            for _, track in pairs(animator:GetPlayingAnimationTracks()) do
-                local animName = (track.Animation and track.Animation.Name or ""):upper()
-                local animId = (track.Animation and track.Animation.AnimationId or ""):upper()
-                for _, kw in ipairs(AnimalKeywords) do
-                    if animName:find(kw) or animId:find(kw) then
-                        return true
-                    end
-                end
-            end
-        end
-    end
-    
-    -- Kiểm tra qua RemoteSpy style (nếu có event biến hình)
-    for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-        if remote:IsA("RemoteEvent") then
-            local rName = remote.Name:upper()
-            if rName:find("MORPH") or rName:find("ANIMAL") or rName:find("TRANSFORM") then
-                return true  -- Game có hệ thống morph -> khả năng cao đang là animal
-            end
-        end
-    end
-    
-    return false
-end
-
--- Hàm teleport khi phát hiện brainrot/animal
-local function QuickTeleportToIsland(islandName)
-    pcall(function()
-        local islandPart = FindIsland(islandName)
-        if not islandPart then 
-            print("⚠️ [AutoTP] Không tìm thấy đảo: " .. islandName)
-            return false 
-        end
-        
-        local char = Player.Character
-        if not char then return false end
-        
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return false end
-        
-        local targetPos = islandPart.Position + Vector3.new(0, islandPart.Size.Y / 2 + 5, 0)
-        hrp.CFrame = CFrame.new(targetPos)
-        
-        print("✅ [AutoTP] Đã tele đến " .. islandName)
-        return true
-    end)
-end
-
--- Vòng lặp kiểm tra brainrot & animal
-local function BrainrotAnimalCheckLoop()
-    while task.wait(Settings.CheckInterval) do
-        pcall(function()
-            if not Settings.Enabled then return end
-            
-            local isBrainrot = IsBrainrot()
-            local isAnimal = IsAnimal()
-            
-            -- Brainrot detection
-            if Settings.BrainrotEnabled and isBrainrot and not Settings.LastState.IsBrainrot then
-                print("🧠 [Brainrot] Phát hiện biến thành brainrot! Đang tele...")
-                QuickTeleportToIsland(Settings.BrainrotTeleportTarget)
-            end
-            
-            -- Animal detection
-            if Settings.AnimalEnabled and isAnimal and not Settings.LastState.IsAnimal then
-                print("🐾 [Animal] Phát hiện biến thành động vật! Đang tele...")
-                QuickTeleportToIsland(Settings.AnimalTeleportTarget)
-            end
-            
-            -- Cập nhật trạng thái
-            Settings.LastState.IsBrainrot = isBrainrot
-            Settings.LastState.IsAnimal = isAnimal
-        end)
-    end
+    return nil
 end
 
 -- =====================
--- Original Functions (giữ nguyên)
+-- ISLAND FINDER
 -- =====================
 
--- Hàm tìm đảo theo tên
-local function FindIsland(islandName)
-    local keywords = IslandKeywords[islandName] or {islandName:upper()}
+local function FindIslandPart(islandName)
+    local keywords = Settings.IslandEntities[islandName] or {islandName:upper()}
     
+    -- Tìm model/part của đảo
     for _, v in pairs(workspace:GetDescendants()) do
         local name = (v.Name or ""):upper()
-        for _, kw in pairs(keywords) do
-            if name:find(kw) then
+        local parentName = (v.Parent and v.Parent.Name or ""):upper()
+        
+        for _, kw in ipairs(keywords) do
+            if name:find(kw) or parentName:find(kw) then
                 if v:IsA("BasePart") then
                     return v
                 elseif v:IsA("Model") then
                     local pp = v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart")
                     if pp then return pp end
+                    
                     local biggestPart = nil
                     local biggestSize = 0
                     for _, part in pairs(v:GetDescendants()) do
@@ -338,25 +282,106 @@ local function FindIsland(islandName)
             end
         end
     end
+    
+    -- Fallback: tìm theo tên chính xác
+    for _, v in pairs(workspace:GetDescendants()) do
+        local name = (v.Name or ""):upper()
+        if name:find(islandName:upper()) then
+            if v:IsA("BasePart") then
+                return v
+            elseif v:IsA("Model") then
+                local pp = v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart")
+                if pp then return pp end
+            end
+        end
+    end
+    
     return nil
 end
 
--- Hàm xác định vị trí hiện tại
-local function GetCurrentIsland()
-    local char = Player.Character
-    if not char then return nil end
+-- =====================
+-- TELEPORT FUNCTIONS
+-- =====================
+
+local function TeleportToIsland(islandName)
+    local success = pcall(function()
+        local islandPart = FindIslandPart(islandName)
+        if not islandPart then 
+            print("⚠️ Không tìm thấy đảo: " .. islandName)
+            return false 
+        end
+        
+        local char = plr.Character
+        if not char then return false end
+        
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return false end
+        
+        local targetPos = islandPart.Position + Vector3.new(0, islandPart.Size.Y / 2 + 8, 0)
+        hrp.CFrame = CFrame.new(targetPos)
+        
+        print("✅ Teleported to: " .. islandName)
+        return true
+    end)
+    return success
+end
+
+-- =====================
+-- MAIN DETECTION LOOP
+-- =====================
+
+local lastTransformState = nil
+
+local function TransformDetectionLoop()
+    while task.wait(Settings.CheckInterval) do
+        pcall(function()
+            if not Settings.Enabled then return end
+            if not Settings.AutoTPOnTransform then return end
+            
+            local currentIsland, displayText = DetectTransformation()
+            
+            -- Nếu phát hiện biến hình và khác với trạng thái trước đó
+            if currentIsland and currentIsland ~= lastTransformState then
+                print("🔍 Phát hiện biến hình: " .. (displayText or "Unknown") .. " → Đảo: " .. currentIsland)
+                
+                -- Teleport đến đảo tương ứng
+                local success = TeleportToIsland(currentIsland)
+                if success then
+                    print("✅ Đã tele đến " .. currentIsland .. " do biến hình thành " .. (displayText or "entity"))
+                end
+                
+                lastTransformState = currentIsland
+                
+            elseif not currentIsland then
+                -- Reset trạng thái nếu không còn biến hình
+                if lastTransformState ~= nil then
+                    lastTransformState = nil
+                end
+            end
+        end)
+    end
+end
+
+-- =====================
+-- MANUAL TELEPORT LOOP
+-- =====================
+
+local function GetAllIslandsFromCurrent()
+    -- Tìm đảo gần nhất hiện tại
+    local char = plr.Character
+    if not char then return Settings.IslandNames end
     
     local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
+    if not hrp then return Settings.IslandNames end
     
     local pos = hrp.Position
     local closestIsland = nil
     local closestDist = math.huge
     
-    for _, islandName in ipairs(IslandOrder) do
-        local islandPart = FindIsland(islandName)
-        if islandPart then
-            local dist = (pos - islandPart.Position).Magnitude
+    for _, islandName in ipairs(Settings.IslandNames) do
+        local part = FindIslandPart(islandName)
+        if part then
+            local dist = (pos - part.Position).Magnitude
             if dist < closestDist then
                 closestDist = dist
                 closestIsland = islandName
@@ -364,127 +389,63 @@ local function GetCurrentIsland()
         end
     end
     
-    if closestDist < 100 then
-        return closestIsland
-    end
-    return nil
-end
-
--- Hàm teleport
-local function TeleportToIsland(islandName)
-    pcall(function()
-        local islandPart = FindIsland(islandName)
-        if not islandPart then 
-            print("⚠️ Không tìm thấy đảo: " .. islandName)
-            return false 
+    if not closestIsland then return Settings.IslandNames end
+    
+    -- Lấy danh sách từ đảo hiện tại đến cao nhất
+    local result = {}
+    local found = false
+    for _, islandName in ipairs(Settings.IslandNames) do
+        if islandName == closestIsland then
+            found = true
         end
-        
-        local char = Player.Character
-        if not char then return false end
-        
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return false end
-        
-        local targetPos = islandPart.Position + Vector3.new(0, islandPart.Size.Y / 2 + 5, 0)
-        hrp.CFrame = CFrame.new(targetPos)
-        
-        print("✅ Teleported to: " .. islandName)
-        return true
-    end)
-    return false
-end
-
--- Hàm lấy danh sách đảo cần tele
-local function GetIslandsToTeleport()
-    local currentIsland = GetCurrentIsland()
-    if not currentIsland then
-        print("⚠️ Không xác định được vị trí, bắt đầu từ đầu")
-        return IslandOrder
-    end
-    
-    Settings.CurrentIsland = currentIsland
-    print("📍 Vị trí hiện tại: " .. currentIsland)
-    
-    local currentIndex = nil
-    for i, name in ipairs(IslandOrder) do
-        if name == currentIsland then
-            currentIndex = i
-            break
+        if found then
+            table.insert(result, islandName)
         end
     end
     
-    if not currentIndex then
-        return IslandOrder
+    -- Nếu chỉ có 1 đảo (đang ở cao nhất), trả về tất cả từ đầu
+    if #result <= 1 then
+        return Settings.IslandNames
     end
     
-    local islandsToTeleport = {}
-    for i = currentIndex, #IslandOrder do
-        table.insert(islandsToTeleport, IslandOrder[i])
-    end
-    
-    if #islandsToTeleport > 1 then
-        table.remove(islandsToTeleport, 1)
-    end
-    
-    return islandsToTeleport
+    return result
 end
 
--- Main loop
-local function IslandTeleportLoop()
+local function ManualTeleportLoop()
     while Settings.Enabled and task.wait(Settings.TeleportDelay) do
         pcall(function()
-            local islands = GetIslandsToTeleport()
-            
-            if #islands == 0 then
-                print("✅ Đã ở đảo thấp nhất! (Common)")
-                Settings.Enabled = false
-                return
-            end
-            
-            print("🔄 Đang tele: " .. table.concat(islands, " → "))
+            local islands = GetAllIslandsFromCurrent()
             
             for _, islandName in ipairs(islands) do
                 if not Settings.Enabled then break end
                 
+                -- Kiểm tra xem có đang biến hình không (ưu tiên)
+                local transformIsland = DetectTransformation()
+                if transformIsland then
+                    print("⏸ Phát hiện biến hình trong khi đang tele, chuyển đến " .. transformIsland)
+                    TeleportToIsland(transformIsland)
+                    break
+                end
+                
                 local success = TeleportToIsland(islandName)
                 if success then
-                    task.wait(Settings.TeleportDelay)
-                else
-                    local found = false
-                    for _, kw in pairs(IslandKeywords[islandName] or {}) do
-                        for _, v in pairs(workspace:GetDescendants()) do
-                            if v:IsA("BasePart") and (v.Name:upper():find(kw) or (v.Parent and v.Parent.Name:upper():find(kw))) then
-                                local targetPos = v.Position + Vector3.new(0, v.Size.Y / 2 + 5, 0)
-                                local char = Player.Character
-                                if char and char:FindFirstChild("HumanoidRootPart") then
-                                    char.HumanoidRootPart.CFrame = CFrame.new(targetPos)
-                                    print("✅ Teleported to: " .. islandName .. " (alternative)")
-                                    found = true
-                                end
-                                break
-                            end
-                        end
-                        if found then break end
-                    end
                     task.wait(Settings.TeleportDelay)
                 end
             end
             
             if Settings.Enabled then
-                print("✅ Hoàn thành! Đã tele đến Common")
-                Settings.Enabled = false
-                if UpdateUI then UpdateUI() end
+                task.wait(0.5)
             end
         end)
     end
 end
 
 -- =====================
--- UI (Mở rộng)
+-- UI
 -- =====================
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "MIU_Island_TP"
+ScreenGui.Name = "MIU_Island_TP_Pro"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 pcall(function() ScreenGui.Parent = CoreGui end)
@@ -492,9 +453,9 @@ pcall(function() ScreenGui.Parent = CoreGui end)
 -- Main Frame
 local Main = Instance.new("Frame")
 Main.Name = "MIU_Main"
-Main.Size = UDim2.new(0, 340, 0, 360)  -- Mở rộng để chứa thêm option
-Main.Position = UDim2.new(0.5, -170, 0.5, -180)
-Main.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+Main.Size = UDim2.new(0, 380, 0, 420)
+Main.Position = UDim2.new(0.5, -190, 0.5, -210)
+Main.BackgroundColor3 = Color3.fromRGB(10, 10, 22)
 Main.BackgroundTransparency = 0.05
 Main.BorderSizePixel = 0
 Main.Active = true
@@ -563,7 +524,7 @@ end)
 -- Header
 local Header = Instance.new("Frame")
 Header.Size = UDim2.new(1, 0, 0, 38)
-Header.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+Header.BackgroundColor3 = Color3.fromRGB(25, 25, 48)
 Header.BackgroundTransparency = 0
 Header.BorderSizePixel = 0
 Header.Parent = Main
@@ -575,7 +536,7 @@ HeaderCorner.Parent = Header
 local HeaderFix = Instance.new("Frame")
 HeaderFix.Size = UDim2.new(1, 0, 0, 10)
 HeaderFix.Position = UDim2.new(0, 0, 0, 28)
-HeaderFix.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+HeaderFix.BackgroundColor3 = Color3.fromRGB(25, 25, 48)
 HeaderFix.BorderSizePixel = 0
 HeaderFix.Parent = Header
 
@@ -584,7 +545,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -50, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🏝 MIU Island Teleporter+"
+Title.Text = "🏝 MIU Island TP PRO"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.TextSize = 15
 Title.Font = Enum.Font.GothamBold
@@ -605,156 +566,154 @@ CloseBtn.MouseButton1Click:Connect(function()
 end)
 
 -- Content
-local Content = Instance.new("Frame")
+local Content = Instance.new("ScrollingFrame")
 Content.Size = UDim2.new(1, -16, 1, -48)
 Content.Position = UDim2.new(0, 8, 0, 43)
 Content.BackgroundTransparency = 1
+Content.ScrollBarThickness = 4
+Content.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 100)
+Content.CanvasSize = UDim2.new(0, 0, 0, 500)
 Content.Parent = Main
 
--- Current position
-local CurrentPosLabel = Instance.new("TextLabel")
-CurrentPosLabel.Size = UDim2.new(1, 0, 0, 22)
-CurrentPosLabel.Position = UDim2.new(0, 0, 0, 0)
-CurrentPosLabel.BackgroundTransparency = 1
-CurrentPosLabel.Text = "📍 Đang xác định vị trí..."
-CurrentPosLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
-CurrentPosLabel.TextSize = 13
-CurrentPosLabel.Font = Enum.Font.GothamSemibold
-CurrentPosLabel.TextXAlignment = Enum.TextXAlignment.Left
-CurrentPosLabel.Parent = Content
+-- Entity Detection Status
+local EntityStatus = Instance.new("TextLabel")
+EntityStatus.Size = UDim2.new(1, -10, 0, 22)
+EntityStatus.Position = UDim2.new(0, 5, 0, 5)
+EntityStatus.BackgroundTransparency = 1
+EntityStatus.Text = "👾 Entity: Đang phát hiện..."
+EntityStatus.TextColor3 = Color3.fromRGB(200, 200, 220)
+EntityStatus.TextSize = 13
+EntityStatus.Font = Enum.Font.GothamBold
+EntityStatus.TextXAlignment = Enum.TextXAlignment.Left
+EntityStatus.Parent = Content
 
--- Route
-local RouteLabel = Instance.new("TextLabel")
-RouteLabel.Size = UDim2.new(1, 0, 0, 35)
-RouteLabel.Position = UDim2.new(0, 0, 0, 22)
-RouteLabel.BackgroundTransparency = 1
-RouteLabel.Text = "Route: --"
-RouteLabel.TextColor3 = Color3.fromRGB(120, 120, 150)
-RouteLabel.TextSize = 11
-RouteLabel.Font = Enum.Font.Gotham
-RouteLabel.TextXAlignment = Enum.TextXAlignment.Left
-RouteLabel.TextWrapped = true
-RouteLabel.Parent = Content
+-- Detected Island
+local DetectedIsland = Instance.new("TextLabel")
+DetectedIsland.Size = UDim2.new(1, -10, 0, 18)
+DetectedIsland.Position = UDim2.new(0, 5, 0, 28)
+DetectedIsland.BackgroundTransparency = 1
+DetectedIsland.Text = "🏝 Đảo: Chưa xác định"
+DetectedIsland.TextColor3 = Color3.fromRGB(150, 150, 180)
+DetectedIsland.TextSize = 12
+DetectedIsland.Font = Enum.Font.GothamSemibold
+DetectedIsland.TextXAlignment = Enum.TextXAlignment.Left
+DetectedIsland.Parent = Content
 
--- Island list
-local ListLabel = Instance.new("TextLabel")
-ListLabel.Size = UDim2.new(1, 0, 0, 40)
-ListLabel.Position = UDim2.new(0, 0, 0, 58)
-ListLabel.BackgroundTransparency = 1
-ListLabel.Text = "Celestial → OG → Hacked → Divine → Secret → Godly → Mythic → Legend → Epic → Rare → Common"
-ListLabel.TextColor3 = Color3.fromRGB(80, 80, 120)
-ListLabel.TextSize = 10
-ListLabel.Font = Enum.Font.Gotham
-ListLabel.TextXAlignment = Enum.TextXAlignment.Left
-ListLabel.TextWrapped = true
-ListLabel.Parent = Content
+-- Separator
+local Sep1 = Instance.new("Frame")
+Sep1.Size = UDim2.new(1, -10, 0, 1)
+Sep1.Position = UDim2.new(0, 5, 0, 50)
+Sep1.BackgroundColor3 = Color3.fromRGB(50, 50, 75)
+Sep1.BorderSizePixel = 0
+Sep1.Parent = Content
 
--- NEW: Separator
-local Separator1 = Instance.new("Frame")
-Separator1.Size = UDim2.new(1, 0, 0, 1)
-Separator1.Position = UDim2.new(0, 0, 0, 100)
-Separator1.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-Separator1.BorderSizePixel = 0
-Separator1.Parent = Content
+-- Island List Label
+local ListTitle = Instance.new("TextLabel")
+ListTitle.Size = UDim2.new(1, -10, 0, 20)
+ListTitle.Position = UDim2.new(0, 5, 0, 55)
+ListTitle.BackgroundTransparency = 1
+ListTitle.Text = "📋 Danh sách đảo & Entity:"
+ListTitle.TextColor3 = Color3.fromRGB(255, 200, 100)
+ListTitle.TextSize = 13
+ListTitle.Font = Enum.Font.GothamBold
+ListTitle.TextXAlignment = Enum.TextXAlignment.Left
+ListTitle.Parent = Content
 
--- NEW: Brainrot Section Label
-local BrainrotSection = Instance.new("TextLabel")
-BrainrotSection.Size = UDim2.new(1, 0, 0, 18)
-BrainrotSection.Position = UDim2.new(0, 0, 0, 105)
-BrainrotSection.BackgroundTransparency = 1
-BrainrotSection.Text = "🧠 Auto TP khi biến Brainrot"
-BrainrotSection.TextColor3 = Color3.fromRGB(180, 120, 255)
-BrainrotSection.TextSize = 12
-BrainrotSection.Font = Enum.Font.GothamBold
-BrainrotSection.TextXAlignment = Enum.TextXAlignment.Left
-BrainrotSection.Parent = Content
+-- Island/Entity list
+local YPos = 78
+local IslandLabels = {}
 
--- NEW: Brainrot Toggle
-local BrainrotToggle = Instance.new("ImageButton")
-BrainrotToggle.Size = UDim2.new(0, 50, 0, 24)
-BrainrotToggle.Position = UDim2.new(0, 0, 0, 126)
-BrainrotToggle.BackgroundTransparency = 1
-BrainrotToggle.Image = "rbxassetid://3570695787"
-BrainrotToggle.ImageColor3 = Color3.fromRGB(60, 60, 80)
-BrainrotToggle.Parent = Content
+for i, islandName in ipairs(Settings.IslandNames) do
+    -- Màu sắc gradient từ xanh (Common) đến tím/tím đỏ (Celestial)
+    local color
+    if islandName == "Common" then color = Color3.fromRGB(150, 255, 150)
+    elseif islandName == "Rare" then color = Color3.fromRGB(100, 200, 255)
+    elseif islandName == "Epic" then color = Color3.fromRGB(180, 100, 255)
+    elseif islandName == "Legend" then color = Color3.fromRGB(255, 200, 50)
+    elseif islandName == "Mythic" then color = Color3.fromRGB(255, 80, 200)
+    elseif islandName == "Godly" then color = Color3.fromRGB(255, 100, 50)
+    elseif islandName == "Secret" then color = Color3.fromRGB(200, 50, 255)
+    elseif islandName == "Hacked" then color = Color3.fromRGB(0, 255, 100)
+    elseif islandName == "OG" then color = Color3.fromRGB(255, 50, 50)
+    elseif islandName == "Celestial" then color = Color3.fromRGB(255, 255, 0)
+    end
+    
+    local islandLabel = Instance.new("TextLabel")
+    islandLabel.Size = UDim2.new(1, -10, 0, 16)
+    islandLabel.Position = UDim2.new(0, 10, 0, YPos)
+    islandLabel.BackgroundTransparency = 1
+    islandLabel.Text = islandName .. " → " .. table.concat(Settings.IslandEntities[islandName], ", ")
+    islandLabel.TextColor3 = color
+    islandLabel.TextSize = 10
+    islandLabel.Font = Enum.Font.GothamSemibold
+    islandLabel.TextXAlignment = Enum.TextXAlignment.Left
+    islandLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    islandLabel.Parent = Content
+    
+    IslandLabels[islandName] = islandLabel
+    YPos = YPos + 18
+end
 
-local BrainrotToggleInd = Instance.new("Frame")
-BrainrotToggleInd.Size = UDim2.new(0, 18, 0, 18)
-BrainrotToggleInd.Position = UDim2.new(0, 3, 0.5, -9)
-BrainrotToggleInd.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
-BrainrotToggleInd.BorderSizeProp = 0
-BrainrotToggleInd.Parent = BrainrotToggle
+-- Separator
+local Sep2 = Instance.new("Frame")
+Sep2.Size = UDim2.new(1, -10, 0, 1)
+Sep2.Position = UDim2.new(0, 5, 0, YPos + 5)
+Sep2.BackgroundColor3 = Color3.fromRGB(50, 50, 75)
+Sep2.BorderSizePixel = 0
+Sep2.Parent = Content
 
-local BrainrotToggleIndCorner = Instance.new("UICorner")
-BrainrotToggleIndCorner.CornerRadius = UDim.new(1, 0)
-BrainrotToggleIndCorner.Parent = BrainrotToggleInd
+YPos = YPos + 12
 
-local BrainrotToggleLabel = Instance.new("TextLabel")
-BrainrotToggleLabel.Size = UDim2.new(0, 120, 0, 24)
-BrainrotToggleLabel.Position = UDim2.new(0, 56, 0, 126)
-BrainrotToggleLabel.BackgroundTransparency = 1
-BrainrotToggleLabel.Text = "Brainrot: BẬT"
-BrainrotToggleLabel.TextColor3 = Color3.fromRGB(180, 255, 120)
-BrainrotToggleLabel.TextSize = 12
-BrainrotToggleLabel.Font = Enum.Font.GothamSemibold
-BrainrotToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-BrainrotToggleLabel.Parent = Content
+-- Transform Toggle
+local TransformLabel = Instance.new("TextLabel")
+TransformLabel.Size = UDim2.new(1, -10, 0, 20)
+TransformLabel.Position = UDim2.new(0, 5, 0, YPos)
+TransformLabel.BackgroundTransparency = 1
+TransformLabel.Text = "🔄 Auto TP khi biến hình (Entity → Đảo tương ứng)"
+TransformLabel.TextColor3 = Color3.fromRGB(180, 180, 255)
+TransformLabel.TextSize = 12
+TransformLabel.Font = Enum.Font.GothamBold
+TransformLabel.TextXAlignment = Enum.TextXAlignment.Left
+TransformLabel.Parent = Content
 
--- NEW: Animal Section Label
-local AnimalSection = Instance.new("TextLabel")
-AnimalSection.Size = UDim2.new(1, 0, 0, 18)
-AnimalSection.Position = UDim2.new(0, 0, 0, 156)
-AnimalSection.BackgroundTransparency = 1
-AnimalSection.Text = "🐾 Auto TP khi biến Động Vật"
-AnimalSection.TextColor3 = Color3.fromRGB(255, 180, 100)
-AnimalSection.TextSize = 12
-AnimalSection.Font = Enum.Font.GothamBold
-AnimalSection.TextXAlignment = Enum.TextXAlignment.Left
-AnimalSection.Parent = Content
+YPos = YPos + 24
 
--- NEW: Animal Toggle
-local AnimalToggle = Instance.new("ImageButton")
-AnimalToggle.Size = UDim2.new(0, 50, 0, 24)
-AnimalToggle.Position = UDim2.new(0, 0, 0, 177)
-AnimalToggle.BackgroundTransparency = 1
-AnimalToggle.Image = "rbxassetid://3570695787"
-AnimalToggle.ImageColor3 = Color3.fromRGB(60, 60, 80)
-AnimalToggle.Parent = Content
+local TransformToggle = Instance.new("ImageButton")
+TransformToggle.Size = UDim2.new(0, 50, 0, 24)
+TransformToggle.Position = UDim2.new(0, 10, 0, YPos)
+TransformToggle.BackgroundTransparency = 1
+TransformToggle.Image = "rbxassetid://3570695787"
+TransformToggle.ImageColor3 = Color3.fromRGB(0, 200, 80)
+TransformToggle.Parent = Content
 
-local AnimalToggleInd = Instance.new("Frame")
-AnimalToggleInd.Size = UDim2.new(0, 18, 0, 18)
-AnimalToggleInd.Position = UDim2.new(0, 3, 0.5, -9)
-AnimalToggleInd.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
-AnimalToggleInd.BorderSizeProp = 0
-AnimalToggleInd.Parent = AnimalToggle
+local TransformToggleInd = Instance.new("Frame")
+TransformToggleInd.Size = UDim2.new(0, 18, 0, 18)
+TransformToggleInd.Position = UDim2.new(0, 29, 0.5, -9)
+TransformToggleInd.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+TransformToggleInd.BorderSizePixel = 0
+TransformToggleInd.Parent = TransformToggle
 
-local AnimalToggleIndCorner = Instance.new("UICorner")
-AnimalToggleIndCorner.CornerRadius = UDim.new(1, 0)
-AnimalToggleIndCorner.Parent = AnimalToggleInd
+local TransformToggleIndCorner = Instance.new("UICorner")
+TransformToggleIndCorner.CornerRadius = UDim.new(1, 0)
+TransformToggleIndCorner.Parent = TransformToggleInd
 
-local AnimalToggleLabel = Instance.new("TextLabel")
-AnimalToggleLabel.Size = UDim2.new(0, 120, 0, 24)
-AnimalToggleLabel.Position = UDim2.new(0, 56, 0, 177)
-AnimalToggleLabel.BackgroundTransparency = 1
-AnimalToggleLabel.Text = "Animal: BẬT"
-AnimalToggleLabel.TextColor3 = Color3.fromRGB(180, 255, 120)
-AnimalToggleLabel.TextSize = 12
-AnimalToggleLabel.Font = Enum.Font.GothamSemibold
-AnimalToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-AnimalToggleLabel.Parent = Content
+local TransformToggleLabel = Instance.new("TextLabel")
+TransformToggleLabel.Size = UDim2.new(0, 200, 0, 24)
+TransformToggleLabel.Position = UDim2.new(0, 66, 0, YPos)
+TransformToggleLabel.BackgroundTransparency = 1
+TransformToggleLabel.Text = "Auto Transform TP: BẬT"
+TransformToggleLabel.TextColor3 = Color3.fromRGB(180, 255, 120)
+TransformToggleLabel.TextSize = 12
+TransformToggleLabel.Font = Enum.Font.GothamSemibold
+TransformToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TransformToggleLabel.Parent = Content
 
--- NEW: Separator 2
-local Separator2 = Instance.new("Frame")
-Separator2.Size = UDim2.new(1, 0, 0, 1)
-Separator2.Position = UDim2.new(0, 0, 0, 207)
-Separator2.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-Separator2.BorderSizeProp = 0
-Separator2.Parent = Content
+YPos = YPos + 32
 
--- Main Toggle (giữ nguyên)
+-- Main Toggle
 local ToggleBtn = Instance.new("ImageButton")
 ToggleBtn.Size = UDim2.new(0, 70, 0, 34)
-ToggleBtn.Position = UDim2.new(0, 0, 0, 214)
+ToggleBtn.Position = UDim2.new(0, 10, 0, YPos)
 ToggleBtn.BackgroundTransparency = 1
 ToggleBtn.Image = "rbxassetid://3570695787"
 ToggleBtn.ImageColor3 = Color3.fromRGB(60, 60, 80)
@@ -772,122 +731,105 @@ ToggleIndCorner.CornerRadius = UDim.new(1, 0)
 ToggleIndCorner.Parent = ToggleInd
 
 local ToggleLabel = Instance.new("TextLabel")
-ToggleLabel.Size = UDim2.new(0, 100, 0, 34)
-ToggleLabel.Position = UDim2.new(0, 80, 0, 214)
+ToggleLabel.Size = UDim2.new(0, 150, 0, 34)
+ToggleLabel.Position = UDim2.new(0, 86, 0, YPos)
 ToggleLabel.BackgroundTransparency = 1
-ToggleLabel.Text = "Bắt đầu Teleport"
+ToggleLabel.Text = "▶ Bắt đầu Teleport"
 ToggleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-ToggleLabel.TextSize = 13
-ToggleLabel.Font = Enum.Font.GothamSemibold
+ToggleLabel.TextSize = 14
+ToggleLabel.Font = Enum.Font.GothamBold
 ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
 ToggleLabel.Parent = Content
 
--- NEW: Status Brainrot/Animal
-local StatusExtra = Instance.new("TextLabel")
-StatusExtra.Size = UDim2.new(1, 0, 0, 18)
-StatusExtra.Position = UDim2.new(0, 0, 0, 252)
-StatusExtra.BackgroundTransparency = 1
-StatusExtra.Text = "🧠 Brainrot: ❌ | 🐾 Animal: ❌"
-StatusExtra.TextColor3 = Color3.fromRGB(120, 120, 150)
-StatusExtra.TextSize = 11
-StatusExtra.Font = Enum.Font.Gotham
-StatusExtra.TextXAlignment = Enum.TextXAlignment.Left
-StatusExtra.Parent = Content
+YPos = YPos + 42
 
--- Status label
+-- Status Display
+local StatusTransform = Instance.new("TextLabel")
+StatusTransform.Size = UDim2.new(1, -10, 0, 18)
+StatusTransform.Position = UDim2.new(0, 5, 0, YPos)
+StatusTransform.BackgroundTransparency = 1
+StatusTransform.Text = "🔄 Transform: ❌ Chưa phát hiện"
+StatusTransform.TextColor3 = Color3.fromRGB(120, 120, 150)
+StatusTransform.TextSize = 11
+StatusTransform.Font = Enum.Font.Gotham
+StatusTransform.TextXAlignment = Enum.TextXAlignment.Left
+StatusTransform.Parent = Content
+
+YPos = YPos + 20
+
 local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(1, 0, 0, 18)
-StatusLabel.Position = UDim2.new(0, 0, 0, 270)
+StatusLabel.Size = UDim2.new(1, -10, 0, 18)
+StatusLabel.Position = UDim2.new(0, 5, 0, YPos)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "⏹ Sẵn sàng"
+StatusLabel.Text = "⏹ Dừng"
 StatusLabel.TextColor3 = Color3.fromRGB(120, 120, 150)
-StatusLabel.TextSize = 11
-StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.TextSize = 12
+StatusLabel.Font = Enum.Font.GothamBold
 StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
 StatusLabel.Parent = Content
 
--- Hàm cập nhật UI
-function UpdateUI()
-    local currentIsland = GetCurrentIsland()
-    if currentIsland then
-        CurrentPosLabel.Text = "📍 Vị trí: " .. currentIsland
-        CurrentPosLabel.TextColor3 = Color3.fromRGB(100, 255, 150)
-        
-        local islands = GetIslandsToTeleport()
-        if #islands > 0 then
-            RouteLabel.Text = "Route: " .. table.concat(islands, " → ")
-            RouteLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-        else
-            RouteLabel.Text = "✅ Đã ở đảo thấp nhất!"
-            RouteLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-        end
-    else
-        CurrentPosLabel.Text = "📍 Không xác định được vị trí"
-        CurrentPosLabel.TextColor3 = Color3.fromRGB(255, 150, 100)
-        RouteLabel.Text = "Route: Celestial → OG → Hacked → Divine → Secret → Godly → Mythic → Legend → Epic → Rare → Common"
-        RouteLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-    end
+-- Resize canvas
+Content.CanvasSize = UDim2.new(0, 0, 0, YPos + 40)
+
+-- =====================
+-- UI FUNCTIONS
+-- =====================
+
+local transformOn = true
+
+local function UpdateUI()
+    local islandName, displayText = DetectTransformation()
     
-    -- Cập nhật brainrot/animal status
-    local isBrainrot = IsBrainrot()
-    local isAnimal = IsAnimal()
-    StatusExtra.Text = "🧠 Brainrot: " .. (isBrainrot and "✅" or "❌") .. " | 🐾 Animal: " .. (isAnimal and "✅" or "❌")
+    if islandName then
+        EntityStatus.Text = "👾 Entity: " .. (displayText or "Unknown")
+        EntityStatus.TextColor3 = Color3.fromRGB(100, 255, 150)
+        DetectedIsland.Text = "🏝 Đảo: " .. islandName
+        DetectedIsland.TextColor3 = Color3.fromRGB(255, 200, 100)
+        StatusTransform.Text = "🔄 Transform: ✅ " .. (displayText or "Unknown") .. " → " .. islandName
+        StatusTransform.TextColor3 = Color3.fromRGB(100, 255, 150)
+    else
+        EntityStatus.Text = "👾 Entity: Không phát hiện"
+        EntityStatus.TextColor3 = Color3.fromRGB(180, 180, 180)
+        DetectedIsland.Text = "🏝 Đảo: Chưa xác định"
+        DetectedIsland.TextColor3 = Color3.fromRGB(150, 150, 180)
+        StatusTransform.Text = "🔄 Transform: ❌ Chưa phát hiện"
+        StatusTransform.TextColor3 = Color3.fromRGB(120, 120, 150)
+    end
     
     if Settings.Enabled then
-        StatusLabel.Text = "▶ ĐANG TELEPORT..."
+        StatusLabel.Text = "▶ ĐANG CHẠY..."
         StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
-        ToggleLabel.Text = "Đang chạy..."
+        ToggleLabel.Text = "⏹ Dừng Teleport"
     else
-        StatusLabel.Text = "⏹ Sẵn sàng"
+        StatusLabel.Text = "⏹ Dừng"
         StatusLabel.TextColor3 = Color3.fromRGB(120, 120, 150)
-        ToggleLabel.Text = "Bắt đầu Teleport"
+        ToggleLabel.Text = "▶ Bắt đầu Teleport"
     end
 end
 
--- Toggle functions
-local brainrotOn = true
-local function ToggleBrainrot()
-    brainrotOn = not brainrotOn
-    Settings.BrainrotEnabled = brainrotOn
+-- Toggle Transform
+local function ToggleTransform()
+    transformOn = not transformOn
+    Settings.AutoTPOnTransform = transformOn
     
-    if brainrotOn then
-        BrainrotToggle.ImageColor3 = Color3.fromRGB(0, 200, 80)
-        BrainrotToggleInd.Position = UDim2.new(0, 29, 0.5, -9)
-        BrainrotToggleInd.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        BrainrotToggleLabel.TextColor3 = Color3.fromRGB(180, 255, 120)
-        BrainrotToggleLabel.Text = "Brainrot: BẬT"
+    if transformOn then
+        TransformToggle.ImageColor3 = Color3.fromRGB(0, 200, 80)
+        TransformToggleInd.Position = UDim2.new(0, 29, 0.5, -9)
+        TransformToggleInd.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        TransformToggleLabel.TextColor3 = Color3.fromRGB(180, 255, 120)
+        TransformToggleLabel.Text = "Auto Transform TP: BẬT"
     else
-        BrainrotToggle.ImageColor3 = Color3.fromRGB(60, 60, 80)
-        BrainrotToggleInd.Position = UDim2.new(0, 3, 0.5, -9)
-        BrainrotToggleInd.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
-        BrainrotToggleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-        BrainrotToggleLabel.Text = "Brainrot: TẮT"
+        TransformToggle.ImageColor3 = Color3.fromRGB(60, 60, 80)
+        TransformToggleInd.Position = UDim2.new(0, 3, 0.5, -9)
+        TransformToggleInd.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+        TransformToggleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+        TransformToggleLabel.Text = "Auto Transform TP: TẮT"
     end
 end
 
-local animalOn = true
-local function ToggleAnimal()
-    animalOn = not animalOn
-    Settings.AnimalEnabled = animalOn
-    
-    if animalOn then
-        AnimalToggle.ImageColor3 = Color3.fromRGB(0, 200, 80)
-        AnimalToggleInd.Position = UDim2.new(0, 29, 0.5, -9)
-        AnimalToggleInd.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        AnimalToggleLabel.TextColor3 = Color3.fromRGB(180, 255, 120)
-        AnimalToggleLabel.Text = "Animal: BẬT"
-    else
-        AnimalToggle.ImageColor3 = Color3.fromRGB(60, 60, 80)
-        AnimalToggleInd.Position = UDim2.new(0, 3, 0.5, -9)
-        AnimalToggleInd.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
-        AnimalToggleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-        AnimalToggleLabel.Text = "Animal: TẮT"
-    end
-end
-
--- Main toggle
+-- Main Toggle
 local isOn = false
-local function ToggleTeleport()
+local function ToggleMain()
     isOn = not isOn
     Settings.Enabled = isOn
     
@@ -896,72 +838,70 @@ local function ToggleTeleport()
         ToggleInd.Position = UDim2.new(0, 39, 0.5, -14)
         ToggleInd.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         ToggleLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
-        StatusLabel.Text = "▶ ĐANG TELEPORT..."
+        StatusLabel.Text = "▶ ĐANG CHẠY..."
         StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
         
-        local currentIsland = GetCurrentIsland()
-        if currentIsland then
-            print("📍 Bắt đầu từ: " .. currentIsland)
-        end
+        print("🚀 MIU Hub TP PRO khởi động...")
         
-        -- Start brainrot/animal check loop
-        coroutine.wrap(BrainrotAnimalCheckLoop)()
-        -- Start main teleport loop
-        coroutine.wrap(IslandTeleportLoop)()
+        -- Start transform detection loop
+        coroutine.wrap(TransformDetectionLoop)()
+        -- Start manual teleport loop
+        coroutine.wrap(ManualTeleportLoop)()
     else
         ToggleBtn.ImageColor3 = Color3.fromRGB(60, 60, 80)
         ToggleInd.Position = UDim2.new(0, 3, 0.5, -14)
         ToggleInd.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
         ToggleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-        StatusLabel.Text = "⏹ Đã dừng"
+        StatusLabel.Text = "⏹ Dừng"
         StatusLabel.TextColor3 = Color3.fromRGB(255, 150, 100)
+        ToggleLabel.Text = "▶ Bắt đầu Teleport"
+        
+        print("⏹ MIU Hub TP PRO đã dừng")
     end
     
     UpdateUI()
 end
 
--- Connect events
-ToggleBtn.MouseButton1Click:Connect(ToggleTeleport)
-BrainrotToggle.MouseButton1Click:Connect(ToggleBrainrot)
-AnimalToggle.MouseButton1Click:Connect(ToggleAnimal)
+-- Connect
+ToggleBtn.MouseButton1Click:Connect(ToggleMain)
+TransformToggle.MouseButton1Click:Connect(ToggleTransform)
 
--- Cập nhật UI định kỳ
+-- UI Update loop
 task.spawn(function()
-    while task.wait(2) do
-        if not Settings.Enabled then
-            UpdateUI()
-        end
+    while task.wait(1) do
+        pcall(UpdateUI)
     end
 end)
 
 task.wait(1)
 UpdateUI()
 
--- Console
-print("=" .. string.rep("=", 50) .. "=")
-print("  🏝 MIU Hub - Island Teleporter+")
-print("=" .. string.rep("=", 50) .. "=")
+-- Console output
+print("=" .. string.rep("=", 55) .. "=")
+print("  🏝 MIU Hub - Island Teleporter PRO")
+print("=" .. string.rep("=", 55) .. "=")
 print("")
-print("  📋 Thứ tự đảo:")
-print("  Celestial → OG → Hacked → Divine → Secret → Godly → Mythic → Legend → Epic → Rare → Common")
+print("  📋 DANH SÁCH ĐẢO & ENTITY:")
+print("  ─────────────────────────────")
+for i, islandName in ipairs(Settings.IslandNames) do
+    print("  " .. i .. ". " .. islandName .. " → " .. table.concat(Settings.IslandEntities[islandName], ", "))
+end
 print("")
-print("  🧠 Auto TP khi biến Brainrot (ON)")
-print("  🐾 Auto TP khi biến Động Vật (ON)")
-print("")
-print("  🎯 Cách hoạt động:")
-print("  - Tự động xác định đảo đang đứng")
-print("  - Teleport từ đảo hiện tại xuống Common")
-print("  - Tự động tele về Common khi biến brainrot")
-print("  - Tự động tele về Common khi biến động vật")
+print("  🎯 CÁCH HOẠT ĐỘNG:")
+print("  • Phát hiện biến hình Entity qua tên trên đầu")
+print("  • Phát hiện qua: BillboardGui, Model name, DisplayName")
+print("  • Phát hiện qua: Attributes, Accessories, Mesh, Animation")
+print("  • Tự động TELEPORT đến đảo tương ứng với Entity")
 print("")
 print("  ✅ Kéo thả UI để di chuyển")
-print("  ✅ Bật ON để bắt đầu")
+print("  ✅ Bật toggle để bắt đầu")
+print("  ✅ Bật/Tắt Auto Transform TP riêng")
 print("")
-print("=" .. string.rep("=", 50) .. "=")
+print("=" .. string.rep("=", 55) .. "=")
 
 -- Global
 _G.MIU_IslandTP = {
-    Start = ToggleTeleport,
+    Start = ToggleMain,
     Stop = function() 
         Settings.Enabled = false
         isOn = false
@@ -969,16 +909,12 @@ _G.MIU_IslandTP = {
         ToggleInd.Position = UDim2.new(0, 3, 0.5, -14)
         ToggleInd.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
         ToggleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-        StatusLabel.Text = "⏹ Đã dừng"
+        StatusLabel.Text = "⏹ Dừng"
         StatusLabel.TextColor3 = Color3.fromRGB(255, 150, 100)
         print("⏹ Đã dừng teleport")
     end,
     Status = function() return Settings.Enabled end,
-    CurrentIsland = GetCurrentIsland,
-    -- NEW functions
-    ToggleBrainrot = ToggleBrainrot,
-    ToggleAnimal = ToggleAnimal,
-    IsBrainrot = IsBrainrot,
-    IsAnimal = IsAnimal,
+    Detect = DetectTransformation,
+    ToggleTransform = ToggleTransform,
     Settings = Settings
 }
