@@ -1,0 +1,558 @@
+--[[
+    MIU Hub - Kick A Lucky Block
+    Perfect Kick & Claim | Bonus Train | Collect Cash | Upgrade All | Buy Speed | Auto Rebirth
+]]
+
+local MIUHub = {}
+MIUHub.__index = MIUHub
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local CoreGui = game:GetService("CoreGui")
+
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+-- Kiểm tra và tạo ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MIUHub_Gui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Kiểm tra CoreGui an toàn
+local parent = CoreGui
+pcall(function()
+    ScreenGui.Parent = parent
+end)
+
+-- Variables
+local Toggles = {
+    PerfectKick = false,
+    BonusTrain = false,
+    CollectCash = false,
+    UpgradeAll = false,
+    BuySpeed = false,
+    AutoRebirth = false
+}
+
+-- Main GUI
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MIUHub_Main"
+MainFrame.Size = UDim2.new(0, 280, 0, 400)
+MainFrame.Position = UDim2.new(0.5, -140, 0.5, -200)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+MainFrame.BackgroundTransparency = 0.1
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = false -- Sẽ tự xử lý drag
+MainFrame.Parent = ScreenGui
+
+-- Tạo bo góc
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 10)
+UICorner.Parent = MainFrame
+
+-- Shadow
+local Shadow = Instance.new("ImageLabel")
+Shadow.Name = "Shadow"
+Shadow.Size = UDim2.new(1, 20, 1, 20)
+Shadow.Position = UDim2.new(0, -10, 0, -10)
+Shadow.BackgroundTransparency = 1
+Shadow.Image = "rbxassetid://1316045217"
+Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+Shadow.ImageTransparency = 0.6
+Shadow.ScaleType = Enum.ScaleType.Slice
+Shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+Shadow.Parent = MainFrame
+
+-- Title Bar
+local TitleBar = Instance.new("Frame")
+TitleBar.Name = "TitleBar"
+TitleBar.Size = UDim2.new(1, 0, 0, 40)
+TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+TitleBar.BackgroundTransparency = 0
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local TitleBarCorner = Instance.new("UICorner")
+TitleBarCorner.CornerRadius = UDim.new(0, 10)
+TitleBarCorner.Parent = TitleBar
+
+-- Chỉ bo góc trên
+local TopCornerFix = Instance.new("Frame")
+TopCornerFix.Size = UDim2.new(1, 0, 0, 10)
+TopCornerFix.Position = UDim2.new(0, 0, 0, 30)
+TopCornerFix.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+TopCornerFix.BorderSizePixel = 0
+TopCornerFix.Parent = TitleBar
+
+-- Title Text
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Name = "Title"
+TitleLabel.Size = UDim2.new(1, -40, 1, 0)
+TitleLabel.Position = UDim2.new(0, 15, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "MIU Hub"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 18
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TitleBar
+
+-- Close Button
+local CloseButton = Instance.new("ImageButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Size = UDim2.new(0, 24, 0, 24)
+CloseButton.Position = UDim2.new(1, -32, 0, 8)
+CloseButton.BackgroundTransparency = 1
+CloseButton.Image = "rbxassetid://6031094678"
+CloseButton.ImageColor3 = Color3.fromRGB(255, 100, 100)
+CloseButton.Parent = TitleBar
+
+-- Minimize Button
+local MinButton = Instance.new("ImageButton")
+MinButton.Name = "MinButton"
+MinButton.Size = UDim2.new(0, 20, 0, 20)
+MinButton.Position = UDim2.new(1, -60, 0, 10)
+MinButton.BackgroundTransparency = 1
+MinButton.Image = "rbxassetid://6031094678"
+MinButton.ImageColor3 = Color3.fromRGB(255, 200, 60)
+MinButton.Parent = TitleBar
+
+-- Content Frame (Scrollable)
+local ContentFrame = Instance.new("ScrollingFrame")
+ContentFrame.Name = "Content"
+ContentFrame.Size = UDim2.new(1, -10, 1, -50)
+ContentFrame.Position = UDim2.new(0, 5, 0, 45)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.BorderSizePixel = 0
+ContentFrame.ScrollBarThickness = 4
+ContentFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 150)
+ContentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ContentFrame.Parent = MainFrame
+
+-- Auto-update canvas size
+local function UpdateCanvas()
+    local totalHeight = 0
+    for _, v in pairs(ContentFrame:GetChildren()) do
+        if v:IsA("Frame") or v:IsA("TextButton") or v:IsA("TextLabel") then
+            totalHeight = totalHeight + v.Size.Y.Offset + 6
+        end
+    end
+    ContentFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight + 10)
+end
+
+-- Function to create toggle button
+local function CreateToggle(name, callback)
+    local yPos = #ContentFrame:GetChildren() * 46
+    
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Name = name .. "_Frame"
+    ToggleFrame.Size = UDim2.new(1, -10, 0, 40)
+    ToggleFrame.Position = UDim2.new(0, 5, 0, yPos)
+    ToggleFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+    ToggleFrame.BorderSizePixel = 0
+    ToggleFrame.Parent = ContentFrame
+    
+    local ToggleCorner = Instance.new("UICorner")
+    ToggleCorner.CornerRadius = UDim.new(0, 8)
+    ToggleCorner.Parent = ToggleFrame
+    
+    -- Label
+    local Label = Instance.new("TextLabel")
+    Label.Name = "Label"
+    Label.Size = UDim2.new(0.7, -10, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = name:gsub("([%u])([%l])", " %1%2"):gsub("^%s*", ""):gsub("(%l)([%u])", "%1 %2")
+    Label.TextColor3 = Color3.fromRGB(200, 200, 220)
+    Label.TextSize = 14
+    Label.Font = Enum.Font.GothamSemibold
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = ToggleFrame
+    
+    -- Toggle Button
+    local ToggleBtn = Instance.new("ImageButton")
+    ToggleBtn.Name = "Toggle"
+    ToggleBtn.Size = UDim2.new(0, 44, 0, 22)
+    ToggleBtn.Position = UDim2.new(1, -54, 0.5, -11)
+    ToggleBtn.BackgroundTransparency = 1
+    ToggleBtn.Image = "rbxassetid://135283977825181"
+    ToggleBtn.ImageColor3 = Color3.fromRGB(60, 60, 80)
+    ToggleBtn.Parent = ToggleFrame
+    
+    -- Indicator
+    local Indicator = Instance.new("Frame")
+    Indicator.Name = "Indicator"
+    Indicator.Size = UDim2.new(0, 18, 0, 18)
+    Indicator.Position = UDim2.new(0, 2, 0.5, -9)
+    Indicator.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+    Indicator.BorderSizePixel = 0
+    Indicator.Parent = ToggleBtn
+    
+    local IndicatorCorner = Instance.new("UICorner")
+    IndicatorCorner.CornerRadius = UDim.new(1, 0)
+    IndicatorCorner.Parent = Indicator
+    
+    local isOn = false
+    
+    local function UpdateToggle()
+        isOn = not isOn
+        if isOn then
+            ToggleBtn.ImageColor3 = Color3.fromRGB(0, 180, 80)
+            Indicator.Position = UDim2.new(0, 24, 0.5, -9)
+            Indicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        else
+            ToggleBtn.ImageColor3 = Color3.fromRGB(60, 60, 80)
+            Indicator.Position = UDim2.new(0, 2, 0.5, -9)
+            Indicator.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+        end
+        Toggles[name] = isOn
+        if callback then
+            pcall(callback, isOn)
+        end
+    end
+    
+    ToggleBtn.MouseButton1Click:Connect(UpdateToggle)
+    
+    UpdateCanvas()
+    return ToggleFrame
+end
+
+-- Thêm các chức năng
+local function CreateSection(text)
+    local yPos = #ContentFrame:GetChildren() * 46
+    
+    local SectionLabel = Instance.new("TextLabel")
+    SectionLabel.Name = "Section_" .. text
+    SectionLabel.Size = UDim2.new(1, -10, 0, 30)
+    SectionLabel.Position = UDim2.new(0, 5, 0, yPos)
+    SectionLabel.BackgroundTransparency = 0.5
+    SectionLabel.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+    SectionLabel.Text = text
+    SectionLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+    SectionLabel.TextSize = 13
+    SectionLabel.Font = Enum.Font.GothamBold
+    SectionLabel.TextXAlignment = Enum.TextXAlignment.Center
+    SectionLabel.Parent = ContentFrame
+    
+    local SectionCorner = Instance.new("UICorner")
+    SectionCorner.CornerRadius = UDim.new(0, 6)
+    SectionCorner.Parent = SectionLabel
+    
+    UpdateCanvas()
+end
+
+-- Drag functionality
+local dragging = false
+local dragStart = Vector2.new()
+local startPos = Vector2.new()
+
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = Vector2.new(input.Position.X, input.Position.Y)
+        startPos = Vector2.new(MainFrame.Position.X.Scale, MainFrame.Position.Y.Scale)
+        
+        -- Tính toán lại dựa trên offset
+        local absPos = Vector2.new(MainFrame.AbsolutePosition.X, MainFrame.AbsolutePosition.Y)
+        dragStart = Vector2.new(input.Position.X, input.Position.Y)
+        startPos = Vector2.new(absPos.X, absPos.Y)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(0, startPos.X + delta.X, 0, startPos.Y + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- Close / Minimize
+local minimized = false
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+    -- Clean up loops
+    for _, v in pairs(getconnections or {}) do
+        -- cleanup placeholder
+    end
+end)
+
+MinButton.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if minimized then
+        MainFrame:TweenSize(UDim2.new(0, 280, 0, 40), "Out", "Quad", 0.3, true)
+        ContentFrame.Visible = false
+    else
+        MainFrame:TweenSize(UDim2.new(0, 280, 0, 400), "Out", "Quad", 0.3, true)
+        wait(0.15)
+        ContentFrame.Visible = true
+    end
+end)
+
+-- =====================
+-- GAME LOGIC
+-- =====================
+
+-- Hàm tìm đối tượng game
+local function FindObject(path)
+    local obj = nil
+    for _, part in pairs(path) do
+        if not obj then
+            obj = game:FindFirstChild(part)
+        else
+            obj = obj:FindFirstChild(part)
+        end
+        if not obj then return nil end
+    end
+    return obj
+end
+
+-- Tìm kiếm sâu hơn
+local function DeepFind(parent, name)
+    if not parent then return nil end
+    local found = parent:FindFirstChild(name, true)
+    return found
+end
+
+-- Perfect Kick & Claim
+local function PerfectKickLoop()
+    while Toggles.PerfectKick and task.wait(0.5) do
+        pcall(function()
+            -- Tìm các nút kick
+            for _, v in pairs(PlayerGui:GetDescendants()) do
+                if v:IsA("TextButton") or v:IsA("ImageButton") then
+                    local txt = (v.Text or ""):lower()
+                    if txt:find("kick") or txt:find("claim") then
+                        fireclickdetector(v)
+                    end
+                end
+            end
+            
+            -- Tìm ClickDetector
+            for _, v in pairs(workspace:GetDescendants()) do
+                if v:IsA("ClickDetector") then
+                    fireclickdetector(v)
+                end
+            end
+            
+            -- Tìm ProximityPrompt
+            for _, v in pairs(workspace:GetDescendants()) do
+                if v:IsA("ProximityPrompt") and v.Enabled then
+                    fireproximityprompt(v)
+                end
+            end
+        end)
+    end
+end
+
+-- Collect Cash
+local function CollectCashLoop()
+    while Toggles.CollectCash and task.wait(0.3) do
+        pcall(function()
+            -- Tìm các đồng xu / cash để thu thập
+            for _, v in pairs(workspace:GetDescendants()) do
+                if v:IsA("Part") or v:IsA("MeshPart") or v:IsA("Model") then
+                    local name = (v.Name or ""):lower()
+                    if name:find("coin") or name:find("cash") or name:find("money") or name:find("collect") then
+                        if v:IsA("Model") and v.PrimaryPart then
+                            fireclickdetector(v.PrimaryPart:FindFirstChildOfClass("ClickDetector") or v.PrimaryPart:FindFirstChildOfClass("ProximityPrompt"))
+                        elseif v:IsA("BasePart") then
+                            fireclickdetector(v:FindFirstChildOfClass("ClickDetector") or v:FindFirstChildOfClass("ProximityPrompt"))
+                        end
+                    end
+                end
+            end
+            
+            -- Tìm GUI buttons collect
+            for _, v in pairs(PlayerGui:GetDescendants()) do
+                if (v:IsA("TextButton") or v:IsA("ImageButton")) then
+                    local txt = (v.Text or ""):lower()
+                    if txt:find("collect") or txt:find("claim") then
+                        fireclickdetector(v)
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- Upgrade All
+local function UpgradeAllLoop()
+    while Toggles.UpgradeAll and task.wait(1) do
+        pcall(function()
+            for _, v in pairs(PlayerGui:GetDescendants()) do
+                if (v:IsA("TextButton") or v:IsA("ImageButton")) then
+                    local txt = (v.Text or ""):lower()
+                    if txt:find("upgrade") or txt:find("buy") and not txt:find("speed") then
+                        fireclickdetector(v)
+                        task.wait(0.1)
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- Buy Speed
+local function BuySpeedLoop()
+    while Toggles.BuySpeed and task.wait(1) do
+        pcall(function()
+            for _, v in pairs(PlayerGui:GetDescendants()) do
+                if (v:IsA("TextButton") or v:IsA("ImageButton")) then
+                    local txt = (v.Text or ""):lower()
+                    if txt:find("speed") and (txt:find("buy") or txt:find("upgrade")) then
+                        fireclickdetector(v)
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- Auto Rebirth
+local function AutoRebirthLoop()
+    while Toggles.AutoRebirth and task.wait(2) do
+        pcall(function()
+            for _, v in pairs(PlayerGui:GetDescendants()) do
+                if (v:IsA("TextButton") or v:IsA("ImageButton")) then
+                    local txt = (v.Text or ""):lower()
+                    if txt:find("rebirth") or txt:find("prestige") or txt:find("reset") then
+                        fireclickdetector(v)
+                    end
+                end
+            end
+        })
+    end
+end
+
+-- Bonus Train
+local function BonusTrainLoop()
+    while Toggles.BonusTrain and task.wait(1.5) do
+        pcall(function()
+            -- Tìm train / bonus
+            for _, v in pairs(workspace:GetDescendants()) do
+                if v:IsA("Part") or v:IsA("Model") then
+                    local name = (v.Name or ""):lower()
+                    if name:find("train") or name:find("bonus") or name:find("reward") then
+                        if v:IsA("Model") and v.PrimaryPart then
+                            fireclickdetector(v.PrimaryPart:FindFirstChildOfClass("ClickDetector"))
+                        elseif v:IsA("BasePart") then
+                            fireclickdetector(v:FindFirstChildOfClass("ClickDetector"))
+                        end
+                    end
+                end
+            end
+            
+            -- GUI buttons
+            for _, v in pairs(PlayerGui:GetDescendants()) do
+                if (v:IsA("TextButton") or v:IsA("ImageButton")) then
+                    local txt = (v.Text or ""):lower()
+                    if txt:find("train") or txt:find("bonus") or txt:find("reward") then
+                        fireclickdetector(v)
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- Tạo UI
+CreateSection("⚡ AUTO FARM")
+CreateToggle("PerfectKick", function(state)
+    if state then
+        coroutine.wrap(PerfectKickLoop)()
+    end
+end)
+
+CreateToggle("BonusTrain", function(state)
+    if state then
+        coroutine.wrap(BonusTrainLoop)()
+    end
+end)
+
+CreateSection("💰 ECONOMY")
+CreateToggle("CollectCash", function(state)
+    if state then
+        coroutine.wrap(CollectCashLoop)()
+    end
+end)
+
+CreateToggle("UpgradeAll", function(state)
+    if state then
+        coroutine.wrap(UpgradeAllLoop)()
+    end
+end)
+
+CreateToggle("BuySpeed", function(state)
+    if state then
+        coroutine.wrap(BuySpeedLoop)()
+    end
+end)
+
+CreateSection("🔄 PROGRESSION")
+CreateToggle("AutoRebirth", function(state)
+    if state then
+        coroutine.wrap(AutoRebirthLoop)()
+    end
+end)
+
+-- Watermark / Credits
+local Watermark = Instance.new("TextLabel")
+Watermark.Name = "Watermark"
+Watermark.Size = UDim2.new(1, -10, 0, 20)
+Watermark.Position = UDim2.new(0, 5, 1, -25)
+Watermark.BackgroundTransparency = 1
+Watermark.Text = "MIU Hub | v1.0"
+Watermark.TextColor3 = Color3.fromRGB(80, 80, 120)
+Watermark.TextSize = 10
+Watermark.Font = Enum.Font.Gotham
+Watermark.TextXAlignment = Enum.TextXAlignment.Center
+Watermark.Parent = ContentFrame
+
+UpdateCanvas()
+
+-- Thông báo đã load
+print("✅ MIU Hub loaded! - Perfect Kick & Claim | Bonus Train | Collect Cash | Upgrade All | Buy Speed | Auto Rebirth")
+
+-- Notify người dùng
+local Notification = Instance.new("Frame")
+Notification.Name = "Notification"
+Notification.Size = UDim2.new(0, 250, 0, 50)
+Notification.Position = UDim2.new(0.5, -125, 0, -60)
+Notification.BackgroundColor3 = Color3.fromRGB(30, 200, 100)
+Notification.BackgroundTransparency = 0.2
+Notification.BorderSizePixel = 0
+Notification.Parent = MainFrame
+
+local NotifCorner = Instance.new("UICorner")
+NotifCorner.CornerRadius = UDim.new(0, 8)
+NotifCorner.Parent = Notification
+
+local NotifText = Instance.new("TextLabel")
+NotifText.Size = UDim2.new(1, 0, 1, 0)
+NotifText.BackgroundTransparency = 1
+NotifText.Text = "✅ MIU Hub loaded!"
+NotifText.TextColor3 = Color3.fromRGB(255, 255, 255)
+NotifText.TextSize = 14
+NotifText.Font = Enum.Font.GothamBold
+NotifText.Parent = Notification
+
+-- Animation notification
+task.spawn(function()
+    Notification:TweenPosition(UDim2.new(0.5, -125, 0, 10), "Out", "Back", 0.5, true)
+    task.wait(2)
+    Notification:TweenPosition(UDim2.new(0.5, -125, 0, -60), "Out", "Quad", 0.5, true)
+    task.wait(0.3)
+    Notification:Destroy()
+end)
