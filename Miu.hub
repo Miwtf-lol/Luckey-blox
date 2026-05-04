@@ -1,215 +1,582 @@
---[[ 
-    MIU Hub - Island Teleporter (FULL FIXED + UI IMPROVED)
+--[[
+    MIU Hub - Island Teleporter V2
+    - Kéo thả UI
+    - Thu nhỏ thành ô vuông
+    - Teleport nhanh hơn
+    - Chống sóng đánh chết
 ]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
 
 local Player = Players.LocalPlayer
 
 -- Settings
 local Settings = {
     Enabled = false,
-    TeleportDelay = 0.2, -- ⚡ nhanh hơn
+    TeleportDelay = 0.3, -- Delay nhanh hơn (0.3s thay vì 1.5s)
     CurrentIsland = nil,
+    Minimized = false
 }
 
--- Island list
+-- Danh sách đảo
 local IslandOrder = {
-    "Celestial","OG","Hacked","Divine","Secret",
-    "Godly","Mythic","Legend","Epic","Rare","Common"
+    "Celestial",
+    "OG",
+    "Hacked",
+    "Divine",
+    "Secret",
+    "Godly",
+    "Mythic",
+    "Legend",
+    "Epic",
+    "Rare",
+    "Common"
 }
 
+-- Từ khóa mở rộng
 local IslandKeywords = {
-    Celestial = {"CELESTIAL","CELEST"},
-    OG = {"OG","ORIGINAL"},
-    Hacked = {"HACKED","HACK"},
-    Divine = {"DIVINE"},
+    Celestial = {"CELESTIAL", "CELEST"},
+    OG = {"OG", "ORIGINAL"},
+    Hacked = {"HACKED", "HACK"},
+    Divine = {"DIVINE", "DIVIN"},
     Secret = {"SECRET"},
-    Godly = {"GODLY","GOD"},
-    Mythic = {"MYTHIC"},
-    Legend = {"LEGEND"},
+    Godly = {"GODLY", "GOD"},
+    Mythic = {"MYTHIC", "MYTH"},
+    Legend = {"LEGEND", "LEGENDARY"},
     Epic = {"EPIC"},
     Rare = {"RARE"},
-    Common = {"COMMON","SPAWN","LOBBY"}
+    Common = {"COMMON", "COMMOM", "SAFE", "SPAWN", "LOBBY"}
 }
 
--- Find island
-local function FindIsland(name)
-    local keys = IslandKeywords[name] or {name:upper()}
+-- Hàm tìm đảo
+local function FindIsland(islandName)
+    local keywords = IslandKeywords[islandName] or {islandName:upper()}
+    
     for _, v in pairs(workspace:GetDescendants()) do
-        local n = v.Name:upper()
-        for _, k in pairs(keys) do
-            if n:find(k) then
-                if v:IsA("BasePart") then return v end
-                if v:IsA("Model") then
-                    return v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart")
+        local name = (v.Name or ""):upper()
+        for _, kw in pairs(keywords) do
+            if name:find(kw) then
+                if v:IsA("BasePart") then
+                    return v
+                elseif v:IsA("Model") then
+                    local pp = v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart")
+                    if pp then return pp end
+                    local biggestPart = nil
+                    local biggestSize = 0
+                    for _, part in pairs(v:GetDescendants()) do
+                        if part:IsA("BasePart") and (part.Size.X * part.Size.Y * part.Size.Z) > biggestSize then
+                            biggestSize = part.Size.X * part.Size.Y * part.Size.Z
+                            biggestPart = part
+                        end
+                    end
+                    if biggestPart then return biggestPart end
                 end
             end
         end
     end
+    return nil
 end
 
--- Teleport (FAST)
-local function Teleport(island)
-    local part = FindIsland(island)
-    if not part then return false end
-
+-- Hàm xác định vị trí hiện tại
+local function GetCurrentIsland()
     local char = Player.Character
-    if not char then return false end
-
+    if not char then return nil end
+    
     local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-
-    local pos = part.Position + Vector3.new(0, 8, 0)
-
-    -- ⚡ anti loading + fast TP
-    pcall(function()
-        game:GetService("Players").LocalPlayer:RequestStreamAroundAsync(pos)
-    end)
-
-    for i = 1, 2 do
-        hrp:PivotTo(CFrame.new(pos))
-        task.wait()
-    end
-
-    return true
-end
-
--- Loop
-local function Loop()
-    while Settings.Enabled do
-        task.wait(Settings.TeleportDelay)
-
-        for _, island in ipairs(IslandOrder) do
-            if not Settings.Enabled then break end
-            Teleport(island)
-            task.wait(Settings.TeleportDelay)
+    if not hrp then return nil end
+    
+    local pos = hrp.Position
+    local closestIsland = nil
+    local closestDist = math.huge
+    
+    for _, islandName in ipairs(IslandOrder) do
+        local islandPart = FindIsland(islandName)
+        if islandPart then
+            local dist = (pos - islandPart.Position).Magnitude
+            if dist < closestDist then
+                closestDist = dist
+                closestIsland = islandName
+            end
         end
+    end
+    
+    if closestDist < 150 then
+        return closestIsland
+    end
+    return nil
+end
 
-        Settings.Enabled = false
+-- Hàm teleport nhanh
+local function TeleportToIsland(islandName)
+    pcall(function()
+        local islandPart = FindIsland(islandName)
+        if not islandPart then return false end
+        
+        local char = Player.Character
+        if not char then return false end
+        
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return false end
+        
+        -- Teleport ngay lập tức thay vì tween
+        local targetPos = islandPart.Position + Vector3.new(0, islandPart.Size.Y / 2 + 8, 0)
+        hrp.CFrame = CFrame.new(targetPos)
+        
+        -- Reset velocity để tránh bị sóng đánh
+        local bv = hrp:FindFirstChildOfClass("BodyVelocity")
+        if bv then bv:Destroy() end
+        
+        -- Thêm trọng lực tạm thời để rơi nhanh
+        hrp.Velocity = Vector3.new(0, -10, 0)
+        
+        return true
+    end)
+    return false
+end
+
+-- Hàm lấy danh sách đảo cần tele
+local function GetIslandsToTeleport()
+    local currentIsland = GetCurrentIsland()
+    if not currentIsland then
+        return IslandOrder
+    end
+    
+    Settings.CurrentIsland = currentIsland
+    
+    local currentIndex = nil
+    for i, name in ipairs(IslandOrder) do
+        if name == currentIsland then
+            currentIndex = i
+            break
+        end
+    end
+    
+    if not currentIndex then
+        return IslandOrder
+    end
+    
+    local islandsToTeleport = {}
+    for i = currentIndex, #IslandOrder do
+        table.insert(islandsToTeleport, IslandOrder[i])
+    end
+    
+    if #islandsToTeleport > 1 then
+        table.remove(islandsToTeleport, 1)
+    end
+    
+    return islandsToTeleport
+end
+
+-- Main loop - Teleport nhanh hơn
+local function IslandTeleportLoop()
+    while Settings.Enabled and task.wait(Settings.TeleportDelay) do
+        pcall(function()
+            local islands = GetIslandsToTeleport()
+            
+            if #islands == 0 then
+                print("✅ Đã ở Common!")
+                Settings.Enabled = false
+                UpdateUI()
+                return
+            end
+            
+            for _, islandName in ipairs(islands) do
+                if not Settings.Enabled then break end
+                
+                TeleportToIsland(islandName)
+                task.wait(Settings.TeleportDelay)
+            end
+            
+            if Settings.Enabled then
+                print("✅ Hoàn thành!")
+                Settings.Enabled = false
+                UpdateUI()
+            end
+        end)
     end
 end
 
--- ================= UI =================
+-- =====================
+-- UI - CÓ THỂ KÉO & THU NHỎ
+-- =====================
+
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Parent = CoreGui
-ScreenGui.Name = "MIU_HUB"
+ScreenGui.Name = "MIU_Island_TP_V2"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+pcall(function() ScreenGui.Parent = CoreGui end)
 
+-- MAIN FRAME
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 300, 0, 220)
-Main.Position = UDim2.new(0.5, -150, 0.5, -110)
-Main.BackgroundColor3 = Color3.fromRGB(20,20,30)
+Main.Name = "MIU_Main"
+Main.Size = UDim2.new(0, 320, 0, 240)
+Main.Position = UDim2.new(0.5, -160, 0.5, -120)
+Main.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+Main.BackgroundTransparency = 0.05
+Main.BorderSizePixel = 0
+Main.Active = true
 Main.Parent = ScreenGui
-Instance.new("UICorner", Main)
 
-local Content = Instance.new("Frame")
-Content.Size = UDim2.new(1,0,1,0)
-Content.BackgroundTransparency = 1
-Content.Parent = Main
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 12)
+UICorner.Parent = Main
 
--- HEADER
+-- Shadow
+local Shadow = Instance.new("ImageLabel")
+Shadow.Size = UDim2.new(1, 20, 1, 20)
+Shadow.Position = UDim2.new(0, -10, 0, -10)
+Shadow.BackgroundTransparency = 1
+Shadow.Image = "rbxassetid://1316045217"
+Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+Shadow.ImageTransparency = 0.6
+Shadow.ScaleType = Enum.ScaleType.Slice
+Shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+Shadow.Parent = Main
+
+-- ===== DRAG CẢI TIẾN =====
+local dragging = false
+local dragStart = Vector2.new()
+local startPos = Vector2.new()
+
+-- Dùng UserInputService cho drag mượt hơn
+local function onDragStart(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Vector2.new(Main.AbsolutePosition.X, Main.AbsolutePosition.Y)
+    end
+end
+
+local function onDragMove(input)
+    if dragging then
+        local delta = input.Position - dragStart
+        Main.Position = UDim2.new(0, startPos.X + delta.X, 0, startPos.Y + delta.Y)
+    end
+end
+
+local function onDragEnd(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end
+
+-- Cho phép kéo trên toàn bộ Main Frame
+Main.InputBegan:Connect(onDragStart)
+UserInputService.InputChanged:Connect(onDragMove)
+UserInputService.InputEnded:Connect(onDragEnd)
+
+-- Header
 local Header = Instance.new("Frame")
-Header.Size = UDim2.new(1,0,0,40)
-Header.BackgroundColor3 = Color3.fromRGB(35,35,55)
+Header.Size = UDim2.new(1, 0, 0, 38)
+Header.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+Header.BackgroundTransparency = 0
+Header.BorderSizePixel = 0
 Header.Parent = Main
-Instance.new("UICorner", Header)
 
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.CornerRadius = UDim.new(0, 12)
+HeaderCorner.Parent = Header
+
+local HeaderFix = Instance.new("Frame")
+HeaderFix.Size = UDim2.new(1, 0, 0, 10)
+HeaderFix.Position = UDim2.new(0, 0, 0, 28)
+HeaderFix.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+HeaderFix.BorderSizePixel = 0
+HeaderFix.Parent = Header
+
+-- Title
 local Title = Instance.new("TextLabel")
-Title.Text = "MIU ISLAND HUB"
-Title.Size = UDim2.new(1,0,1,0)
+Title.Size = UDim2.new(1, -70, 1, 0)
+Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.TextColor3 = Color3.new(1,1,1)
+Title.Text = "🏝 MIU Teleporter"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 15
 Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = Header
 
--- CLOSE
-local Close = Instance.new("TextButton")
-Close.Text = "X"
-Close.Size = UDim2.new(0,22,0,22)
-Close.Position = UDim2.new(1,-25,0.5,-11)
-Close.BackgroundColor3 = Color3.fromRGB(255,80,80)
-Close.Parent = Header
-Instance.new("UICorner", Close)
+-- Minimize Button (thu nhỏ)
+local MinBtn = Instance.new("ImageButton")
+MinBtn.Name = "MinimizeBtn"
+MinBtn.Size = UDim2.new(0, 22, 0, 22)
+MinBtn.Position = UDim2.new(1, -55, 0.5, -11)
+MinBtn.BackgroundTransparency = 1
+MinBtn.Image = "rbxassetid://6031094678"
+MinBtn.ImageColor3 = Color3.fromRGB(255, 200, 60)
+MinBtn.Parent = Header
 
-Close.MouseButton1Click:Connect(function()
+-- Close Button
+local CloseBtn = Instance.new("ImageButton")
+CloseBtn.Size = UDim2.new(0, 22, 0, 22)
+CloseBtn.Position = UDim2.new(1, -28, 0.5, -11)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Image = "rbxassetid://6031094678"
+CloseBtn.ImageColor3 = Color3.fromRGB(255, 80, 80)
+CloseBtn.Parent = Header
+
+-- Content Frame (sẽ ẩn khi minimize)
+local Content = Instance.new("Frame")
+Content.Name = "Content"
+Content.Size = UDim2.new(1, -16, 1, -48)
+Content.Position = UDim2.new(0, 8, 0, 43)
+Content.BackgroundTransparency = 1
+Content.ClipsDescendants = true
+Content.Parent = Main
+
+-- Các thành phần trong Content
+-- Current position
+local CurrentPosLabel = Instance.new("TextLabel")
+CurrentPosLabel.Size = UDim2.new(1, 0, 0, 20)
+CurrentPosLabel.Position = UDim2.new(0, 0, 0, 0)
+CurrentPosLabel.BackgroundTransparency = 1
+CurrentPosLabel.Text = "📍 Đang xác định..."
+CurrentPosLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+CurrentPosLabel.TextSize = 13
+CurrentPosLabel.Font = Enum.Font.GothamSemibold
+CurrentPosLabel.TextXAlignment = Enum.TextXAlignment.Left
+CurrentPosLabel.Parent = Content
+
+-- Route
+local RouteLabel = Instance.new("TextLabel")
+RouteLabel.Size = UDim2.new(1, 0, 0, 30)
+RouteLabel.Position = UDim2.new(0, 0, 0, 20)
+RouteLabel.BackgroundTransparency = 1
+RouteLabel.Text = "Route: --"
+RouteLabel.TextColor3 = Color3.fromRGB(120, 120, 150)
+RouteLabel.TextSize = 11
+RouteLabel.Font = Enum.Font.Gotham
+RouteLabel.TextXAlignment = Enum.TextXAlignment.Left
+RouteLabel.TextWrapped = true
+RouteLabel.Parent = Content
+
+-- Island list
+local ListLabel = Instance.new("TextLabel")
+ListLabel.Size = UDim2.new(1, 0, 0, 70)
+ListLabel.Position = UDim2.new(0, 0, 0, 50)
+ListLabel.BackgroundTransparency = 1
+ListLabel.Text = "↑ Celestial → OG → Hacked → Divine → Secret → Godly → Mythic → Legend → Epic → Rare → Common ↓"
+ListLabel.TextColor3 = Color3.fromRGB(80, 80, 120)
+ListLabel.TextSize = 10
+ListLabel.Font = Enum.Font.Gotham
+ListLabel.TextXAlignment = Enum.TextXAlignment.Left
+ListLabel.TextWrapped = true
+ListLabel.LineHeight = 1.5
+ListLabel.Parent = Content
+
+-- Toggle Button
+local ToggleBtn = Instance.new("ImageButton")
+ToggleBtn.Size = UDim2.new(0, 70, 0, 34)
+ToggleBtn.Position = UDim2.new(0, 0, 0, 125)
+ToggleBtn.BackgroundTransparency = 1
+ToggleBtn.Image = "rbxassetid://3570695787"
+ToggleBtn.ImageColor3 = Color3.fromRGB(60, 60, 80)
+ToggleBtn.Parent = Content
+
+local ToggleInd = Instance.new("Frame")
+ToggleInd.Size = UDim2.new(0, 28, 0, 28)
+ToggleInd.Position = UDim2.new(0, 3, 0.5, -14)
+ToggleInd.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+ToggleInd.BorderSizePixel = 0
+ToggleInd.Parent = ToggleBtn
+
+local ToggleIndCorner = Instance.new("UICorner")
+ToggleIndCorner.CornerRadius = UDim.new(1, 0)
+ToggleIndCorner.Parent = ToggleInd
+
+local ToggleLabel = Instance.new("TextLabel")
+ToggleLabel.Size = UDim2.new(0, 100, 0, 34)
+ToggleLabel.Position = UDim2.new(0, 80, 0, 125)
+ToggleLabel.BackgroundTransparency = 1
+ToggleLabel.Text = "▶ Bắt đầu"
+ToggleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+ToggleLabel.TextSize = 13
+ToggleLabel.Font = Enum.Font.GothamSemibold
+ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+ToggleLabel.Parent = Content
+
+-- Speed indicator
+local SpeedLabel = Instance.new("TextLabel")
+SpeedLabel.Size = UDim2.new(1, 0, 0, 16)
+SpeedLabel.Position = UDim2.new(0, 0, 0, 165)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Text = "⚡ Tốc độ: " .. Settings.TeleportDelay .. "s (nhanh)"
+SpeedLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
+SpeedLabel.TextSize = 11
+SpeedLabel.Font = Enum.Font.Gotham
+SpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+SpeedLabel.Parent = Content
+
+-- Status
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, 0, 0, 18)
+StatusLabel.Position = UDim2.new(0, 0, 0, 185)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "⏹ Sẵn sàng"
+StatusLabel.TextColor3 = Color3.fromRGB(120, 120, 150)
+StatusLabel.TextSize = 12
+StatusLabel.Font = Enum.Font.GothamBold
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+StatusLabel.Parent = Content
+
+-- ===== MINIMIZE / MAXIMIZE =====
+local function ToggleMinimize()
+    Settings.Minimized = not Settings.Minimized
+    
+    if Settings.Minimized then
+        -- Thu nhỏ thành ô vuông nhỏ
+        Main:TweenSize(UDim2.new(0, 50, 0, 50), "Out", "Quad", 0.3, true)
+        Main:TweenPosition(UDim2.new(0, Main.AbsolutePosition.X + 135, 0, Main.AbsolutePosition.Y + 95), "Out", "Quad", 0.3, true)
+        wait(0.15)
+        Content.Visible = false
+        Header.Visible = false
+        
+        -- Tạo icon thu nhỏ
+        MinIcon.Visible = true
+    else
+        -- Mở rộng lại
+        Content.Visible = true
+        Header.Visible = true
+        MinIcon.Visible = false
+        Main:TweenSize(UDim2.new(0, 320, 0, 240), "Out", "Quad", 0.3, true)
+    end
+end
+
+MinBtn.MouseButton1Click:Connect(ToggleMinimize)
+
+-- Icon khi thu nhỏ (ô vuông bé)
+local MinIcon = Instance.new("ImageLabel")
+MinIcon.Name = "MinIcon"
+MinIcon.Size = UDim2.new(1, 0, 1, 0)
+MinIcon.BackgroundTransparency = 1
+MinIcon.Image = "rbxassetid://4483356792"
+MinIcon.ImageColor3 = Color3.fromRGB(0, 200, 255)
+MinIcon.ScaleType = Enum.ScaleType.Fit
+MinIcon.Visible = false
+MinIcon.Parent = Main
+
+-- Click vào icon thu nhỏ để mở lại
+Main.MouseButton1Click:Connect(function()
+    if Settings.Minimized then
+        ToggleMinimize()
+    end
+end)
+
+-- Đóng
+CloseBtn.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
--- MINIMIZE
-local Min = Instance.new("TextButton")
-Min.Text = "-"
-Min.Size = UDim2.new(0,22,0,22)
-Min.Position = UDim2.new(1,-55,0.5,-11)
-Min.BackgroundColor3 = Color3.fromRGB(255,170,0)
-Min.Parent = Header
-Instance.new("UICorner", Min)
-
-local minimized = false
-local originalSize = Main.Size
-
-Min.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    if minimized then
-        TweenService:Create(Main,TweenInfo.new(0.2),{
-            Size = UDim2.new(0,300,0,40)
-        }):Play()
-        Content.Visible = false
+-- ===== UI FUNCTIONS =====
+function UpdateUI()
+    if Settings.Minimized then return end
+    
+    local currentIsland = GetCurrentIsland()
+    if currentIsland then
+        CurrentPosLabel.Text = "📍 Vị trí: " .. currentIsland
+        CurrentPosLabel.TextColor3 = Color3.fromRGB(100, 255, 150)
+        
+        local islands = GetIslandsToTeleport()
+        if #islands > 0 then
+            RouteLabel.Text = "Route: " .. table.concat(islands, " → ")
+            RouteLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+        else
+            RouteLabel.Text = "✅ Đã ở đảo thấp nhất!"
+            RouteLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        end
     else
-        TweenService:Create(Main,TweenInfo.new(0.2),{
-            Size = originalSize
-        }):Play()
-        Content.Visible = true
+        CurrentPosLabel.Text = "📍 Ngoài đảo / Không xác định"
+        CurrentPosLabel.TextColor3 = Color3.fromRGB(255, 150, 100)
+        RouteLabel.Text = "Route: Bắt đầu từ Celestial"
+        RouteLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
     end
-end)
-
--- DRAG (SMOOTH)
-local dragging, dragStart, startPos
-
-Header.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = Main.Position
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        Main.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
-end)
-
--- BUTTON
-local Btn = Instance.new("TextButton")
-Btn.Size = UDim2.new(0,200,0,40)
-Btn.Position = UDim2.new(0.5,-100,0.5,-20)
-Btn.Text = "START TELEPORT"
-Btn.Parent = Content
-
-Btn.MouseButton1Click:Connect(function()
-    Settings.Enabled = not Settings.Enabled
-
+    
     if Settings.Enabled then
-        Btn.Text = "RUNNING..."
-        coroutine.wrap(Loop)()
+        StatusLabel.Text = "▶ ĐANG TELEPORT..."
+        StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
+        ToggleLabel.Text = "⏹ Dừng"
     else
-        Btn.Text = "START TELEPORT"
+        StatusLabel.Text = "⏹ Sẵn sàng"
+        StatusLabel.TextColor3 = Color3.fromRGB(120, 120, 150)
+        ToggleLabel.Text = "▶ Bắt đầu"
+    end
+end
+
+-- Toggle
+local isOn = false
+local function ToggleTeleport()
+    if Settings.Minimized then return end
+    
+    isOn = not isOn
+    Settings.Enabled = isOn
+    
+    if isOn then
+        ToggleBtn.ImageColor3 = Color3.fromRGB(0, 200, 80)
+        ToggleInd.Position = UDim2.new(0, 39, 0.5, -14)
+        ToggleInd.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        ToggleLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
+        StatusLabel.Text = "▶ ĐANG TELEPORT..."
+        StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
+        
+        -- Bắt đầu teleport
+        coroutine.wrap(IslandTeleportLoop)()
+    else
+        ToggleBtn.ImageColor3 = Color3.fromRGB(60, 60, 80)
+        ToggleInd.Position = UDim2.new(0, 3, 0.5, -14)
+        ToggleInd.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+        ToggleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+        StatusLabel.Text = "⏹ Đã dừng"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 150, 100)
+    }
+}
+
+ToggleBtn.MouseButton1Click:Connect(ToggleTeleport)
+
+-- Cập nhật UI tự động
+task.spawn(function()
+    while task.wait(1) do
+        if not Settings.Enabled and not Settings.Minimized then
+            UpdateUI()
+        end
     end
 end)
 
-print("MIU HUB LOADED ✔")
+-- Cập nhật lần đầu
+task.wait(0.5)
+UpdateUI()
+
+-- Console
+print("=" .. string.rep("=", 45) .. "=")
+print("  🏝 MIU Hub - Island Teleporter V2")
+print("=" .. string.rep("=", 45) .. "=")
+print("")
+print("  ✅ CÓ THỂ KÉO UI")
+print("  ✅ CÓ THỂ THU NHỎ (ô vuông)")
+print("  ✅ TELEPORT NHANH (0.3s delay)")
+print("")
+print("  📋 Thứ tự: Celestial → OG → Hacked → Divine → Secret → Godly → Mythic → Legend → Epic → Rare → Common")
+print("  🎯 Tự động xác định vị trí và tele xuống Common")
+print("")
+print("  🖱 Click vào ô vuông nhỏ để mở lại UI")
+print("=" .. string.rep("=", 45) .. "=")
+
+-- Global
+_G.MIU_TP_V2 = {
+    Start = ToggleTeleport,
+    Stop = function()
+        Settings.Enabled = false
+        isOn = false
+        ToggleBtn.ImageColor3 = Color3.fromRGB(60, 60, 80)
+        ToggleInd.Position = UDim2.new(0, 3, 0.5, -14)
+        ToggleInd.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+        ToggleLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+        StatusLabel.Text = "⏹ Đã dừng"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 150, 100)
+    end,
+    Minimize = ToggleMinimize,
+    Status = function() return Settings.Enabled end
+}
