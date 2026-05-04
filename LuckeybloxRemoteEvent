@@ -1,1 +1,58 @@
-loadstring(game:HttpGet("https://raw.githubusercontent.com/78n/SimpleSpy/main/SimpleSpy.lua"))()
+-- RemoteSpy - Dùng trong môi trường được ủy quyền
+-- Bỏ vào executor để bắt RemoteSignals/RemoteEvents
+
+local RemoteSpy = {}
+RemoteSpy.__index = RemoteSpy
+
+function RemoteSpy:HookInstance(instance, depth)
+    depth = depth or 0
+    if depth > 5 then return end
+    
+    for _, child in pairs(instance:GetChildren()) do
+        if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") or child:IsA("UnreliableRemoteEvent") then
+            local oldFire = child.FireServer
+            child.FireServer = function(self, ...)
+                local args = {...}
+                print("[RemoteSpy] FIRED:", child:GetFullName())
+                for i, arg in pairs(args) do
+                    print("   Arg["..i.."]:", typeof(arg), tostring(arg))
+                end
+                return oldFire(self, ...)
+            end
+            
+            -- Hook BindToFunction nếu là RemoteFunction
+            if child:IsA("RemoteFunction") then
+                local oldInvoke = child.InvokeServer
+                child.InvokeServer = function(self, ...)
+                    local args = {...}
+                    print("[RemoteSpy] INVOKE:", child:GetFullName())
+                    for i, arg in pairs(args) do
+                        print("   Arg["..i.."]:", typeof(arg), tostring(arg))
+                    end
+                    return oldInvoke(self, ...)
+                end
+            end
+        end
+        RemoteSpy:HookInstance(child, depth + 1)
+    end
+end
+
+-- Bắt RemoteEvents/RemoteFunctions toàn bộ game
+RemoteSpy:HookInstance(game)
+
+-- Đồng thời bắt các Remote mới được tạo sau
+game.DescendantAdded:Connect(function(child)
+    if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
+        local oldFire = child.FireServer
+        child.FireServer = function(self, ...)
+            local args = {...}
+            print("[RemoteSpy-NEW] FIRED:", child:GetFullName())
+            for i, arg in pairs(args) do
+                print("   Arg["..i.."]:", typeof(arg), tostring(arg))
+            end
+            return oldFire(self, ...)
+        end
+    end
+end)
+
+print("[RemoteSpy] Đã kích hoạt! Mở lucky block VIP để xem remote.")
