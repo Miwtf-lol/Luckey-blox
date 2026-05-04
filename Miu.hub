@@ -1,14 +1,9 @@
 --[[
-    MIU Hub - Safe Zone Teleporter
-    Tự động teleport về SAPE ZONE khi bật ON
+    MIU Hub - Teleport to COMMON (Full Drag UI)
+    Có thể kéo toàn bộ UI, không chỉ thanh tiêu đề
 ]]
 
-local MIU_Teleport = {}
-MIU_Teleport.__index = MIU_Teleport
-
--- Services
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
@@ -19,32 +14,32 @@ local Char = Player.Character or Player.CharacterAdded:Wait()
 -- Settings
 local Settings = {
     Enabled = false,
-    TeleportSpeed = 0.5, -- Thời gian delay giữa các lần check (giây)
-    SafeZoneName = "SAPE ZONE", -- Tên vùng an toàn
-    SafeZoneTag = "SafeZone" -- Tag hoặc tên khác nếu có
+    TeleportSpeed = 0.5,
+    TargetName = "COMMON"
 }
 
--- Tìm Safe Zone
-local function FindSafeZone()
-    -- Cách 1: Tìm theo tên
-    local safeZone = workspace:FindFirstChild(Settings.SafeZoneName)
-    if safeZone then
-        return safeZone
-    end
+-- =====================
+-- TELEPORT LOGIC
+-- =====================
+
+local function FindTarget()
+    -- Tìm theo tên chính xác trước
+    local obj = workspace:FindFirstChild(Settings.TargetName)
+    if obj then return obj end
     
-    -- Cách 2: Tìm theo tên tương tự
+    -- Tìm mở rộng
     for _, v in pairs(workspace:GetDescendants()) do
         local name = (v.Name or ""):upper()
-        if name:find("SAFE") or name:find("SAPE") or name:find("ZONE") or name:find("SAFEZONE") or name:find("SPAWN") then
+        if name:find("COMMON") or name:find("SAFE") or name:find("SPAWN") or name:find("LOBBY") then
             if v:IsA("BasePart") or v:IsA("Model") then
                 return v
             end
         end
     end
     
-    -- Cách 3: Tìm part có chứa "Safe" trong tên
+    -- Tìm platform lớn
     for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("BasePart") and (v.Name:lower():find("safe") or v.Name:lower():find("zone")) then
+        if v:IsA("BasePart") and v.Size.X > 15 and v.Size.Z > 15 then
             return v
         end
     end
@@ -52,287 +47,114 @@ local function FindSafeZone()
     return nil
 end
 
--- Hàm teleport
-local function TeleportToSafeZone()
+local function TeleportToTarget()
     pcall(function()
-        local safeZone = FindSafeZone()
-        if not safeZone then return end
+        local target = FindTarget()
+        if not target then return end
         
-        local character = Player.Character
-        if not character then return end
+        local char = Player.Character
+        if not char then return end
         
-        local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-        if not humanoidRootPart then return end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
         
-        -- Lấy vị trí đích
-        local targetPosition
-        
-        if safeZone:IsA("BasePart") then
-            targetPosition = safeZone.Position + Vector3.new(0, safeZone.Size.Y / 2 + 3, 0)
-        elseif safeZone:IsA("Model") then
-            local primaryPart = safeZone.PrimaryPart
-            if primaryPart then
-                targetPosition = primaryPart.Position + Vector3.new(0, primaryPart.Size.Y / 2 + 3, 0)
-            else
-                -- Lấy part đầu tiên trong model
-                local parts = safeZone:GetDescendants()
-                for _, part in pairs(parts) do
-                    if part:IsA("BasePart") then
-                        targetPosition = part.Position + Vector3.new(0, part.Size.Y / 2 + 3, 0)
-                        break
-                    end
-                end
+        local pos
+        if target:IsA("BasePart") then
+            pos = target.Position + Vector3.new(0, target.Size.Y/2 + 3, 0)
+        elseif target:IsA("Model") then
+            local pp = target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")
+            if pp then
+                pos = pp.Position + Vector3.new(0, pp.Size.Y/2 + 3, 0)
             end
         end
         
-        if targetPosition then
-            -- Có thể dùng CFrame để teleport
-            humanoidRootPart.CFrame = CFrame.new(targetPosition)
-            
-            -- Hoặc dùng Tween để mượt hơn (tùy chọn)
-            -- local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            -- local tween = TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = CFrame.new(targetPosition)})
-            -- tween:Play()
+        if pos then
+            hrp.CFrame = CFrame.new(pos)
         end
     end)
 end
 
--- Kiểm tra và tự động teleport
 local function AutoTeleportLoop()
     while Settings.Enabled and task.wait(Settings.TeleportSpeed) do
         pcall(function()
-            local character = Player.Character
-            if not character then return end
+            local char = Player.Character
+            if not char then return end
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
             
-            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-            if not humanoidRootPart then return end
+            local target = FindTarget()
+            if not target then return end
             
-            -- Kiểm tra xem đã ở safe zone chưa
-            local safeZone = FindSafeZone()
-            if not safeZone then return end
-            
-            -- Tính khoảng cách đến safe zone
-            local dist = 999999
-            if safeZone:IsA("BasePart") then
-                dist = (humanoidRootPart.Position - safeZone.Position).Magnitude
-            elseif safeZone:IsA("Model") and safeZone.PrimaryPart then
-                dist = (humanoidRootPart.Position - safeZone.PrimaryPart.Position).Magnitude
+            local dist = 999
+            if target:IsA("BasePart") then
+                dist = (hrp.Position - target.Position).Magnitude
+            elseif target:IsA("Model") then
+                local pp = target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")
+                if pp then dist = (hrp.Position - pp.Position).Magnitude end
             end
             
-            -- Nếu khoảng cách > 50, teleport về safe zone
-            if dist > 50 then
-                TeleportToSafeZone()
+            if dist > 30 then
+                TeleportToTarget()
             end
         end)
     end
 end
 
--- Khi nhân vật mới xuất hiện
 Player.CharacterAdded:Connect(function(newChar)
     Char = newChar
-    -- Nếu đang bật, tiếp tục loop
     if Settings.Enabled then
         coroutine.wrap(AutoTeleportLoop)()
     end
 end)
 
 -- =====================
--- UI
+-- UI - FULL DRAG
 -- =====================
 
--- Tạo ScreenGui
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "MIU_Teleport_Gui"
+ScreenGui.Name = "MIU_TP_Gui"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-local parent = CoreGui
-pcall(function()
-    ScreenGui.Parent = parent
-end)
+pcall(function() ScreenGui.Parent = CoreGui end)
 
 -- Main Frame
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MIU_TP_Main"
-MainFrame.Size = UDim2.new(0, 240, 0, 100)
-MainFrame.Position = UDim2.new(0, 20, 0.5, -50)
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
-MainFrame.BackgroundTransparency = 0.08
-MainFrame.BorderSizePixel = 0
-MainFrame.Active = true
-MainFrame.Parent = ScreenGui
+local Main = Instance.new("Frame")
+Main.Name = "MIU_Main"
+Main.Size = UDim2.new(0, 250, 0, 120)
+Main.Position = UDim2.new(0, 20, 0.5, -60)
+Main.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+Main.BackgroundTransparency = 0.08
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Parent = ScreenGui
+
+-- Bo góc
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 12)
+UICorner.Parent = Main
 
 -- Shadow
 local Shadow = Instance.new("ImageLabel")
-Shadow.Name = "Shadow"
-Shadow.Size = UDim2.new(1, 16, 1, 16)
-Shadow.Position = UDim2.new(0, -8, 0, -8)
+Shadow.Size = UDim2.new(1, 20, 1, 20)
+Shadow.Position = UDim2.new(0, -10, 0, -10)
 Shadow.BackgroundTransparency = 1
 Shadow.Image = "rbxassetid://1316045217"
 Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-Shadow.ImageTransparency = 0.7
+Shadow.ImageTransparency = 0.65
 Shadow.ScaleType = Enum.ScaleType.Slice
 Shadow.SliceCenter = Rect.new(10, 10, 118, 118)
-Shadow.Parent = MainFrame
+Shadow.Parent = Main
 
--- Corner
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 10)
-UICorner.Parent = MainFrame
-
--- Title Bar
-local TitleBar = Instance.new("Frame")
-TitleBar.Name = "TitleBar"
-TitleBar.Size = UDim2.new(1, 0, 0, 35)
-TitleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
-TitleBar.BackgroundTransparency = 0
-TitleBar.BorderSizePixel = 0
-TitleBar.Parent = MainFrame
-
-local TitleBarCorner = Instance.new("UICorner")
-TitleBarCorner.CornerRadius = UDim.new(0, 10)
-TitleBarCorner.Parent = TitleBar
-
--- Fix bottom corner
-local BottomFix = Instance.new("Frame")
-BottomFix.Size = UDim2.new(1, 0, 0, 10)
-BottomFix.Position = UDim2.new(0, 0, 0, 25)
-BottomFix.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
-BottomFix.BorderSizePixel = 0
-BottomFix.Parent = TitleBar
-
--- Icon
-local IconLabel = Instance.new("ImageLabel")
-IconLabel.Name = "Icon"
-IconLabel.Size = UDim2.new(0, 18, 0, 18)
-IconLabel.Position = UDim2.new(0, 10, 0.5, -9)
-IconLabel.BackgroundTransparency = 1
-IconLabel.Image = "rbxassetid://4483356792"
-IconLabel.ImageColor3 = Color3.fromRGB(0, 200, 255)
-IconLabel.Parent = TitleBar
-
--- Title
-local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Name = "Title"
-TitleLabel.Size = UDim2.new(1, -60, 1, 0)
-TitleLabel.Position = UDim2.new(0, 35, 0, 0)
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Safe Zone Teleporter"
-TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.TextSize = 14
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-TitleLabel.Parent = TitleBar
-
--- Close Button
-local CloseButton = Instance.new("ImageButton")
-CloseButton.Name = "CloseButton"
-CloseButton.Size = UDim2.new(0, 22, 0, 22)
-CloseButton.Position = UDim2.new(1, -28, 0.5, -11)
-CloseButton.BackgroundTransparency = 1
-CloseButton.Image = "rbxassetid://6031094678"
-CloseButton.ImageColor3 = Color3.fromRGB(255, 80, 80)
-CloseButton.Parent = TitleBar
-
--- Content Area
-local ContentFrame = Instance.new("Frame")
-ContentFrame.Name = "Content"
-ContentFrame.Size = UDim2.new(1, -16, 1, -45)
-ContentFrame.Position = UDim2.new(0, 8, 0, 40)
-ContentFrame.BackgroundTransparency = 1
-ContentFrame.Parent = MainFrame
-
--- Status Label
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Name = "StatusLabel"
-StatusLabel.Size = UDim2.new(0.6, -5, 0, 25)
-StatusLabel.Position = UDim2.new(0, 0, 0, 5)
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Status: OFF"
-StatusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-StatusLabel.TextSize = 13
-StatusLabel.Font = Enum.Font.GothamSemibold
-StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
-StatusLabel.Parent = ContentFrame
-
--- Toggle Button (Big)
-local ToggleButton = Instance.new("ImageButton")
-ToggleButton.Name = "ToggleButton"
-ToggleButton.Size = UDim2.new(0, 64, 0, 30)
-ToggleButton.Position = UDim2.new(1, -64, 0, 2.5)
-ToggleButton.BackgroundTransparency = 1
-ToggleButton.Image = "rbxassetid://3570695787"
-ToggleButton.ImageColor3 = Color3.fromRGB(60, 60, 80)
-ToggleButton.Parent = ContentFrame
-
--- Indicator
-local ToggleIndicator = Instance.new("Frame")
-ToggleIndicator.Name = "Indicator"
-ToggleIndicator.Size = UDim2.new(0, 24, 0, 24)
-ToggleIndicator.Position = UDim2.new(0, 3, 0.5, -12)
-ToggleIndicator.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
-ToggleIndicator.BorderSizePixel = 0
-ToggleIndicator.Parent = ToggleButton
-
-local ToggleIndicatorCorner = Instance.new("UICorner")
-ToggleIndicatorCorner.CornerRadius = UDim.new(1, 0)
-ToggleIndicatorCorner.Parent = ToggleIndicator
-
--- Info Label
-local InfoLabel = Instance.new("TextLabel")
-InfoLabel.Name = "InfoLabel"
-InfoLabel.Size = UDim2.new(1, 0, 0, 18)
-InfoLabel.Position = UDim2.new(0, 0, 0, 32)
-InfoLabel.BackgroundTransparency = 1
-InfoLabel.Text = "Auto TP to Safe Zone"
-InfoLabel.TextColor3 = Color3.fromRGB(120, 120, 150)
-InfoLabel.TextSize = 11
-InfoLabel.Font = Enum.Font.Gotham
-InfoLabel.TextXAlignment = Enum.TextXAlignment.Left
-InfoLabel.Parent = ContentFrame
-
--- Toggle function
-local isOn = false
-local function UpdateToggle()
-    isOn = not isOn
-    Settings.Enabled = isOn
-    
-    if isOn then
-        ToggleButton.ImageColor3 = Color3.fromRGB(0, 200, 80)
-        ToggleIndicator.Position = UDim2.new(0, 37, 0.5, -12)
-        ToggleIndicator.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        StatusLabel.Text = "Status: ON"
-        StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
-        InfoLabel.Text = "✓ Auto teleport enabled"
-        InfoLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
-        
-        -- Start loop
-        coroutine.wrap(AutoTeleportLoop)()
-        
-        -- Teleport ngay lập tức
-        TeleportToSafeZone()
-    else
-        ToggleButton.ImageColor3 = Color3.fromRGB(60, 60, 80)
-        ToggleIndicator.Position = UDim2.new(0, 3, 0.5, -12)
-        ToggleIndicator.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
-        StatusLabel.Text = "Status: OFF"
-        StatusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-        InfoLabel.Text = "✕ Auto TP disabled"
-        InfoLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-    end
-end
-
-ToggleButton.MouseButton1Click:Connect(UpdateToggle)
-
--- Drag functionality
+-- ===== DRAG TRÊN TOÀN BỘ UI =====
 local dragging = false
 local dragStart = Vector2.new()
 local startPos = Vector2.new()
 
-TitleBar.InputBegan:Connect(function(input)
+-- Cho phép kéo trên toàn bộ Main Frame
+Main.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
-        local absPos = MainFrame.AbsolutePosition
+        local absPos = Main.AbsolutePosition
         dragStart = Vector2.new(input.Position.X, input.Position.Y)
         startPos = Vector2.new(absPos.X, absPos.Y)
     end
@@ -341,7 +163,7 @@ end)
 UserInputService.InputChanged:Connect(function(input)
     if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
         local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(0, startPos.X + delta.X, 0, startPos.Y + delta.Y)
+        Main.Position = UDim2.new(0, startPos.X + delta.X, 0, startPos.Y + delta.Y)
     end
 end)
 
@@ -351,66 +173,202 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
+-- ===== HEADER =====
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 38)
+Header.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+Header.BackgroundTransparency = 0
+Header.BorderSizePixel = 0
+Header.Parent = Main
+
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.CornerRadius = UDim.new(0, 12)
+HeaderCorner.Parent = Header
+
+local HeaderFix = Instance.new("Frame")
+HeaderFix.Size = UDim2.new(1, 0, 0, 10)
+HeaderFix.Position = UDim2.new(0, 0, 0, 28)
+HeaderFix.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+HeaderFix.BorderSizePixel = 0
+HeaderFix.Parent = Header
+
+-- Icon
+local Icon = Instance.new("ImageLabel")
+Icon.Size = UDim2.new(0, 20, 0, 20)
+Icon.Position = UDim2.new(0, 10, 0.5, -10)
+Icon.BackgroundTransparency = 1
+Icon.Image = "rbxassetid://4483356792"
+Icon.ImageColor3 = Color3.fromRGB(0, 200, 255)
+Icon.Parent = Header
+
+-- Title
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -65, 1, 0)
+Title.Position = UDim2.new(0, 38, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "Teleport → COMMON"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 15
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Header
+
 -- Close
-CloseButton.MouseButton1Click:Connect(function()
+local CloseBtn = Instance.new("ImageButton")
+CloseBtn.Size = UDim2.new(0, 22, 0, 22)
+CloseBtn.Position = UDim2.new(1, -28, 0.5, -11)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Image = "rbxassetid://6031094678"
+CloseBtn.ImageColor3 = Color3.fromRGB(255, 80, 80)
+CloseBtn.Parent = Header
+
+CloseBtn.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
--- Teleport command (test ngay lập tức)
-local function QuickTeleport()
-    TeleportToSafeZone()
+-- ===== CONTENT =====
+local Content = Instance.new("Frame")
+Content.Size = UDim2.new(1, -16, 1, -48)
+Content.Position = UDim2.new(0, 8, 0, 43)
+Content.BackgroundTransparency = 1
+Content.Parent = Main
+
+-- Status
+local StatusText = Instance.new("TextLabel")
+StatusText.Size = UDim2.new(0.6, -5, 0, 28)
+StatusText.Position = UDim2.new(0, 0, 0, 3)
+StatusText.BackgroundTransparency = 1
+StatusText.Text = "⏹ OFF"
+StatusText.TextColor3 = Color3.fromRGB(180, 180, 180)
+StatusText.TextSize = 14
+StatusText.Font = Enum.Font.GothamSemibold
+StatusText.TextXAlignment = Enum.TextXAlignment.Left
+StatusText.Parent = Content
+
+-- Toggle Switch
+local ToggleBtn = Instance.new("ImageButton")
+ToggleBtn.Size = UDim2.new(0, 68, 0, 32)
+ToggleBtn.Position = UDim2.new(1, -68, 0, 1)
+ToggleBtn.BackgroundTransparency = 1
+ToggleBtn.Image = "rbxassetid://3570695787"
+ToggleBtn.ImageColor3 = Color3.fromRGB(60, 60, 80)
+ToggleBtn.Parent = Content
+
+local ToggleInd = Instance.new("Frame")
+ToggleInd.Size = UDim2.new(0, 26, 0, 26)
+ToggleInd.Position = UDim2.new(0, 3, 0.5, -13)
+ToggleInd.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+ToggleInd.BorderSizePixel = 0
+ToggleInd.Parent = ToggleBtn
+
+local ToggleIndCorner = Instance.new("UICorner")
+ToggleIndCorner.CornerRadius = UDim.new(1, 0)
+ToggleIndCorner.Parent = ToggleInd
+
+-- Info
+local InfoText = Instance.new("TextLabel")
+InfoText.Size = UDim2.new(1, 0, 0, 18)
+InfoText.Position = UDim2.new(0, 0, 0, 34)
+InfoText.BackgroundTransparency = 1
+InfoText.Text = "Auto teleport when far from COMMON"
+InfoText.TextColor3 = Color3.fromRGB(120, 120, 150)
+InfoText.TextSize = 11
+InfoText.Font = Enum.Font.Gotham
+InfoText.TextXAlignment = Enum.TextXAlignment.Left
+InfoText.Parent = Content
+
+-- Zone display
+local ZoneText = Instance.new("TextLabel")
+ZoneText.Size = UDim2.new(1, 0, 0, 16)
+ZoneText.Position = UDim2.new(0, 0, 0, 52)
+ZoneText.BackgroundTransparency = 1
+ZoneText.Text = "📍 Tìm: " .. Settings.TargetName
+ZoneText.TextColor3 = Color3.fromRGB(80, 200, 255)
+ZoneText.TextSize = 11
+ZoneText.Font = Enum.Font.Gotham
+ZoneText.TextXAlignment = Enum.TextXAlignment.Left
+ZoneText.Parent = Content
+
+-- ===== TOGGLE FUNCTION =====
+local isOn = false
+local function Toggle()
+    isOn = not isOn
+    Settings.Enabled = isOn
+    
+    if isOn then
+        ToggleBtn.ImageColor3 = Color3.fromRGB(0, 200, 80)
+        ToggleInd.Position = UDim2.new(0, 39, 0.5, -13)
+        ToggleInd.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        StatusText.Text = "▶ ON"
+        StatusText.TextColor3 = Color3.fromRGB(0, 255, 120)
+        InfoText.Text = "✓ Auto TP → COMMON (đang chạy)"
+        InfoText.TextColor3 = Color3.fromRGB(0, 255, 120)
+        ZoneText.TextColor3 = Color3.fromRGB(0, 255, 120)
+        
+        coroutine.wrap(AutoTeleportLoop)()
+        TeleportToTarget()
+    else
+        ToggleBtn.ImageColor3 = Color3.fromRGB(60, 60, 80)
+        ToggleInd.Position = UDim2.new(0, 3, 0.5, -13)
+        ToggleInd.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
+        StatusText.Text = "⏹ OFF"
+        StatusText.TextColor3 = Color3.fromRGB(180, 180, 180)
+        InfoText.Text = "Click ON để bắt đầu"
+        InfoText.TextColor3 = Color3.fromRGB(120, 120, 150)
+        ZoneText.TextColor3 = Color3.fromRGB(80, 200, 255)
+    end
 end
 
--- In ra console hướng dẫn
-print("=" .. string.rep("=", 40) .. "=")
-print("  MIU Hub - Safe Zone Teleporter")
-print("  Loaded successfully!")
-print("=" .. string.rep("=", 40) .. "=")
-print("")
-print("  [ON/OFF] Click toggle to enable auto teleport")
-print("  [DRAG]   Drag title bar to move UI")
-print("  [CLOSE]  Click X to close")
-print("  [CMD]    Execute: QuickTeleport() for manual TP")
-print("")
-print("=" .. string.rep("=", 40) .. "=")
+ToggleBtn.MouseButton1Click:Connect(Toggle)
 
--- Thông báo UI
-local Notification = Instance.new("Frame")
-Notification.Name = "Notif"
-Notification.Size = UDim2.new(0, 220, 0, 45)
-Notification.Position = UDim2.new(0, 30, 0, -55)
-Notification.BackgroundColor3 = Color3.fromRGB(0, 180, 255)
-Notification.BackgroundTransparency = 0.15
-Notification.BorderSizePixel = 0
-Notification.Parent = MainFrame
+-- ===== NOTIFICATION =====
+local Notif = Instance.new("Frame")
+Notif.Size = UDim2.new(0, 240, 0, 44)
+Notif.Position = UDim2.new(0, 5, 0, -54)
+Notif.BackgroundColor3 = Color3.fromRGB(0, 180, 255)
+Notif.BackgroundTransparency = 0.12
+Notif.BorderSizePixel = 0
+Notif.Parent = Main
 
 local NotifCorner = Instance.new("UICorner")
 NotifCorner.CornerRadius = UDim.new(0, 8)
-NotifCorner.Parent = Notification
+NotifCorner.Parent = Notif
 
-local NotifText = Instance.new("TextLabel")
-NotifText.Size = UDim2.new(1, -10, 1, 0)
-NotifText.Position = UDim2.new(0, 10, 0, 0)
-NotifText.BackgroundTransparency = 1
-NotifText.Text = "✅ Safe Zone Teleporter Ready!"
-NotifText.TextColor3 = Color3.fromRGB(255, 255, 255)
-NotifText.TextSize = 13
-NotifText.Font = Enum.Font.GothamSemibold
-NotifText.TextXAlignment = Enum.TextXAlignment.Left
-NotifText.Parent = Notification
+local NotifLabel = Instance.new("TextLabel")
+NotifLabel.Size = UDim2.new(1, -12, 1, 0)
+NotifLabel.Position = UDim2.new(0, 12, 0, 0)
+NotifLabel.BackgroundTransparency = 1
+NotifLabel.Text = "✅ Kéo toàn bộ UI để di chuyển!"
+NotifLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+NotifLabel.TextSize = 13
+NotifLabel.Font = Enum.Font.GothamBold
+NotifLabel.TextXAlignment = Enum.TextXAlignment.Left
+NotifLabel.Parent = Notif
 
--- Animation notification
 task.spawn(function()
-    Notification:TweenPosition(UDim2.new(0, 30, 0, 10), "Out", "Back", 0.5, true)
-    task.wait(2.5)
-    Notification:TweenPosition(UDim2.new(0, 30, 0, -55), "Out", "Quad", 0.5, true)
+    Notif:TweenPosition(UDim2.new(0, 5, 0, 5), "Out", "Back", 0.5, true)
+    task.wait(3)
+    Notif:TweenPosition(UDim2.new(0, 5, 0, -54), "Out", "Quad", 0.5, true)
     task.wait(0.3)
-    Notification:Destroy()
+    Notif:Destroy()
 end)
 
--- Gán ra global để có thể gọi từ console
-_G.MIU_SafeTeleport = {
-    Teleport = TeleportToSafeZone,
-    Toggle = UpdateToggle,
+-- Console
+print("=" .. string.rep("=", 40) .. "=")
+print("  MIU Hub - TP to COMMON")
+print("  ✅ FULL DRAG - Kéo toàn bộ UI!")
+print("=" .. string.rep("=", 40) .. "=")
+print("")
+print("  📌 Kéo THẢ toàn bộ UI để di chuyển")
+print("  📌 Bật ON để tự động teleport về COMMON")
+print("  📌 Tắt OFF để dừng")
+print("")
+print("  Gọi _G.MIU_TP.Toggle() để bật/tắt từ console")
+print("=" .. string.rep("=", 40) .. "=")
+
+-- Global
+_G.MIU_TP = {
+    Teleport = TeleportToTarget,
+    Toggle = Toggle,
     Status = function() return Settings.Enabled end
 }
