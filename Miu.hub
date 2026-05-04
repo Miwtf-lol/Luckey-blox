@@ -250,6 +250,7 @@ Main.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
 Main.BackgroundTransparency = 0.05
 Main.BorderSizePixel = 0
 Main.Active = true
+Main.Selectable = true
 Main.Parent = ScreenGui
 
 local UICorner = Instance.new("UICorner")
@@ -269,32 +270,51 @@ Shadow.SliceCenter = Rect.new(10, 10, 118, 118)
 Shadow.Parent = Main
 
 -- Drag
+-- Drag fix (PC + Mobile)
 local dragging = false
-local dragStart = Vector2.new()
-local startPos = Vector2.new()
+local dragInput
+local dragStart
+local startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    Main.Position = UDim2.new(
+        startPos.X.Scale,
+        startPos.X.Offset + delta.X,
+        startPos.Y.Scale,
+        startPos.Y.Offset + delta.Y
+    )
+end
 
 Main.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+    if input.UserInputType == Enum.UserInputType.MouseButton1 
+    or input.UserInputType == Enum.UserInputType.Touch then
+        
         dragging = true
-        local absPos = Main.AbsolutePosition
-        dragStart = Vector2.new(input.Position.X, input.Position.Y)
-        startPos = Vector2.new(absPos.X, absPos.Y)
+        dragStart = input.Position
+        startPos = Main.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+Main.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+    or input.UserInputType == Enum.UserInputType.Touch then
+        
+        dragInput = input
     end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        Main.Position = UDim2.new(0, startPos.X + delta.X, 0, startPos.Y + delta.Y)
+    if dragging and input == dragInput then
+        update(input)
     end
 end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
-end)
-
 -- Header
 local Header = Instance.new("Frame")
 Header.Size = UDim2.new(1, 0, 0, 38)
