@@ -1,226 +1,113 @@
--- =====================
--- TOGGLES
--- =====================
-local Toggles = {
-    PerfectKick = false,
-    BonusTrain = false,
-    CollectCash = false,
-    UpgradeAll = false,
-    BuySpeed = false,
-    AutoRebirth = false
-}
+-- SETTINGS
+getgenv().SpeedValue = 40
+getgenv().SpeedOn = false
+local DefaultSpeed = 16
 
-local Players = game:GetService("Players")
-local Player = Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = game.Players.LocalPlayer
 
--- =====================
--- REMOTES
--- =====================
-local Remotes = {
-    Kick = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("Kick"),
-    Rebirth = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("Rebirth"),
-    Collect = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("Collect"),
-    Upgrade = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("Upgrade"),
-    Speed = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("Speed"),
-    Bonus = ReplicatedStorage:WaitForChild("Remotes"):FindFirstChild("Bonus")
-}
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+local Frame = Instance.new("Frame")
+local Plus = Instance.new("TextButton")
+local Minus = Instance.new("TextButton")
+local Toggle = Instance.new("TextButton")
+local Label = Instance.new("TextLabel")
 
--- =====================
--- SAFE FIRE (ANTI KICK)
--- =====================
-local function SafeFire(remote, delay)
-    if not remote then return function() end end
+ScreenGui.Parent = game.CoreGui
 
-    local last = 0
-    return function()
-        local now = tick()
-        if now - last >= delay then
-            last = now
+Frame.Parent = ScreenGui
+Frame.BackgroundColor3 = Color3.fromRGB(255, 105, 180)
+Frame.BackgroundTransparency = 0.2
+Frame.Size = UDim2.new(0, 220, 0, 130)
+Frame.Position = UDim2.new(0.4, 0, 0.4, 0)
+Frame.Active = true
+Frame.Draggable = true
+
+-- Label hiển thị speed
+Label.Parent = Frame
+Label.Size = UDim2.new(1, 0, 0.3, 0)
+Label.Text = "Speed: "..getgenv().SpeedValue
+Label.BackgroundTransparency = 1
+Label.TextScaled = true
+
+-- Nút +
+Plus.Parent = Frame
+Plus.Size = UDim2.new(0.5, 0, 0.3, 0)
+Plus.Position = UDim2.new(0.5, 0, 0.3, 0)
+Plus.Text = "+"
+Plus.TextScaled = true
+
+-- Nút -
+Minus.Parent = Frame
+Minus.Size = UDim2.new(0.5, 0, 0.3, 0)
+Minus.Position = UDim2.new(0, 0, 0.3, 0)
+Minus.Text = "-"
+Minus.TextScaled = true
+
+-- Nút ON/OFF
+Toggle.Parent = Frame
+Toggle.Size = UDim2.new(1, 0, 0.4, 0)
+Toggle.Position = UDim2.new(0, 0, 0.6, 0)
+Toggle.Text = "OFF"
+Toggle.TextScaled = true
+Toggle.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+
+-- Tăng speed
+Plus.MouseButton1Click:Connect(function()
+    getgenv().SpeedValue = getgenv().SpeedValue + 5
+    Label.Text = "Speed: "..getgenv().SpeedValue
+end)
+
+-- Giảm speed
+Minus.MouseButton1Click:Connect(function()
+    getgenv().SpeedValue = getgenv().SpeedValue - 5
+    if getgenv().SpeedValue < 16 then
+        getgenv().SpeedValue = 16
+    end
+    Label.Text = "Speed: "..getgenv().SpeedValue
+end)
+
+-- Toggle ON/OFF
+Toggle.MouseButton1Click:Connect(function()
+    getgenv().SpeedOn = not getgenv().SpeedOn
+
+    if getgenv().SpeedOn then
+        Toggle.Text = "ON"
+        Toggle.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+    else
+        Toggle.Text = "OFF"
+        Toggle.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+
+        -- trả về speed mặc định
+        pcall(function()
+            local char = player.Character
+            if char and char:FindFirstChild("Humanoid") then
+                char.Humanoid.WalkSpeed = DefaultSpeed
+            end
+        end)
+    end
+end)
+
+-- Loop speed
+task.spawn(function()
+    while task.wait(0.2) do
+        if getgenv().SpeedOn then
             pcall(function()
-                remote:FireServer()
+                local char = player.Character
+                if char and char:FindFirstChild("Humanoid") then
+                    char.Humanoid.WalkSpeed = getgenv().SpeedValue
+                end
             end)
         end
     end
-end
-
--- =====================
--- FIRE CONFIG
--- =====================
-local Fire = {
-    Kick = SafeFire(Remotes.Kick, 0.18),
-    Collect = SafeFire(Remotes.Collect, 0.3),
-    Rebirth = SafeFire(Remotes.Rebirth, 1.2),
-    Upgrade = SafeFire(Remotes.Upgrade, 0.5),
-    Speed = SafeFire(Remotes.Speed, 0.5),
-    Bonus = SafeFire(Remotes.Bonus, 1)
-}
-
--- =====================
--- LOOPS
--- =====================
-local function PerfectKickLoop()
-    while Toggles.PerfectKick do
-        task.wait()
-        Fire.Kick()
-    end
-end
-
-local function CollectCashLoop()
-    while Toggles.CollectCash do
-        task.wait()
-        Fire.Collect()
-    end
-end
-
-local function AutoRebirthLoop()
-    while Toggles.AutoRebirth do
-        task.wait()
-        Fire.Rebirth()
-    end
-end
-
-local function UpgradeAllLoop()
-    while Toggles.UpgradeAll do
-        task.wait()
-        Fire.Upgrade()
-    end
-end
-
-local function BuySpeedLoop()
-    while Toggles.BuySpeed do
-        task.wait()
-        Fire.Speed()
-    end
-end
-
-local function BonusTrainLoop()
-    while Toggles.BonusTrain do
-        task.wait()
-        Fire.Bonus()
-    end
-end
-
--- =====================
--- GUI + DRAG + MINIMIZE
--- =====================
-local UIS = game:GetService("UserInputService")
-
-local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
-
-local Frame = Instance.new("Frame", ScreenGui)
-Frame.Size = UDim2.new(0, 300, 0, 300)
-Frame.Position = UDim2.new(0.5, -150, 0.5, -150)
-Frame.BackgroundColor3 = Color3.fromRGB(15,15,15)
-Frame.Active = true
-
-Instance.new("UICorner", Frame).CornerRadius = UDim.new(0,10)
-
--- TITLE
-local Title = Instance.new("Frame", Frame)
-Title.Size = UDim2.new(1,0,0,40)
-Title.BackgroundColor3 = Color3.fromRGB(10,10,10)
-
-local TitleText = Instance.new("TextLabel", Title)
-TitleText.Size = UDim2.new(1,-40,1,0)
-TitleText.Position = UDim2.new(0,10,0,0)
-TitleText.BackgroundTransparency = 1
-TitleText.Text = "MIU HUB"
-TitleText.TextColor3 = Color3.fromRGB(255,255,255)
-TitleText.Font = Enum.Font.GothamBold
-TitleText.TextSize = 16
-TitleText.TextXAlignment = Enum.TextXAlignment.Left
-
--- MINIMIZE
-local MinBtn = Instance.new("TextButton", Title)
-MinBtn.Size = UDim2.new(0,30,0,30)
-MinBtn.Position = UDim2.new(1,-35,0,5)
-MinBtn.Text = "-"
-MinBtn.BackgroundColor3 = Color3.fromRGB(40,40,40)
-MinBtn.TextColor3 = Color3.fromRGB(255,255,255)
-
--- CONTENT
-local Content = Instance.new("Frame", Frame)
-Content.Size = UDim2.new(1,0,1,-40)
-Content.Position = UDim2.new(0,0,0,40)
-Content.BackgroundTransparency = 1
-
--- DRAG
-local dragging, dragStart, startPos
-
-Title.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = Frame.Position
-    end
 end)
 
-UIS.InputChanged:Connect(function(input)
-    if dragging then
-        local delta = input.Position - dragStart
-        Frame.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
-    end
-end)
-
-UIS.InputEnded:Connect(function()
-    dragging = false
-end)
-
--- MINIMIZE LOGIC
-local minimized = false
-MinBtn.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    if minimized then
-        Content.Visible = false
-        Frame:TweenSize(UDim2.new(0,300,0,40),"Out","Quad",0.3,true)
+-- Khi respawn
+player.CharacterAdded:Connect(function(char)
+    task.wait(1)
+    if getgenv().SpeedOn then
+        char:WaitForChild("Humanoid").WalkSpeed = getgenv().SpeedValue
     else
-        Frame:TweenSize(UDim2.new(0,300,0,300),"Out","Quad",0.3,true)
-        task.wait(0.15)
-        Content.Visible = true
+        char:WaitForChild("Humanoid").WalkSpeed = DefaultSpeed
     end
 end)
-
--- TOGGLE UI
-local function MakeToggle(text, y, name, func)
-    local label = Instance.new("TextLabel", Content)
-    label.Size = UDim2.new(0.7,0,0,40)
-    label.Position = UDim2.new(0,10,0,y)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(255,255,255)
-    label.Font = Enum.Font.GothamBold
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-
-    local box = Instance.new("TextButton", Content)
-    box.Size = UDim2.new(0,30,0,30)
-    box.Position = UDim2.new(1,-40,0,y+5)
-    box.BackgroundColor3 = Color3.fromRGB(40,40,40)
-    box.Text = ""
-
-    local on = false
-
-    box.MouseButton1Click:Connect(function()
-        on = not on
-        Toggles[name] = on
-        box.BackgroundColor3 = on and Color3.fromRGB(0,200,100) or Color3.fromRGB(40,40,40)
-
-        if on then
-            task.spawn(func)
-        end
-    end)
-end
-
-MakeToggle("Perfect Kick", 0, "PerfectKick", PerfectKickLoop)
-MakeToggle("Bonus Train", 40, "BonusTrain", BonusTrainLoop)
-MakeToggle("Collect Cash", 80, "CollectCash", CollectCashLoop)
-MakeToggle("Upgrade All", 120, "UpgradeAll", UpgradeAllLoop)
-MakeToggle("Buy Speed", 160, "BuySpeed", BuySpeedLoop)
-MakeToggle("Auto Rebirth", 200, "AutoRebirth", AutoRebirthLoop)
