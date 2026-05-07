@@ -1,5 +1,3 @@
--- Bảng loading sẽ biến mất hoàn toàn và không hiện 1 cái gì hết và sau khi bảng màu hồng biến mất thì 2s sau sẽ hiện thông báo loading thành công và GUI chính sẽ xuất hiện --//
-
 --// MIU HUB - Auto x2 Buff + Key System
 --// Mobile + PC
 
@@ -166,81 +164,9 @@ local function RunLoadingAnimation()
 end
 
 ------------------------------------------------
--- THÔNG BÁO LOADING THÀNH CÔNG + GUI CHÍNH
+-- KEY GUI (ẨN)
 ------------------------------------------------
 
-local function ShowSuccessAndMainGUI()
-	-- Tạo thông báo "Loading thành công!"
-	local SuccessLabel = Instance.new("TextLabel")
-	SuccessLabel.Parent = ScreenGui
-	SuccessLabel.Size = UDim2.new(0,300,0,60)
-	SuccessLabel.Position = UDim2.new(0.5,-150,0.5,-30)
-	SuccessLabel.BackgroundColor3 = Color3.fromRGB(255,105,180)
-	SuccessLabel.BackgroundTransparency = 1
-	SuccessLabel.Text = "✅ LOADING THÀNH CÔNG!"
-	SuccessLabel.Font = Enum.Font.GothamBold
-	SuccessLabel.TextSize = 26
-	SuccessLabel.TextColor3 = Color3.new(1,1,1)
-	SuccessLabel.ZIndex = 200
-	
-	local uc = Instance.new("UICorner", SuccessLabel)
-	uc.CornerRadius = UDim.new(0,16)
-	
-	-- Hiệu ứng fade in
-	SuccessLabel.BackgroundTransparency = 1
-	SuccessLabel.TextTransparency = 1
-	task.wait(0.05)
-	
-	local fadeIn = TweenService:Create(SuccessLabel, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0, TextTransparency = 0})
-	fadeIn:Play()
-	fadeIn.Completed:Wait()
-	
-	task.wait(1.2)
-	
-	-- Fade out
-	local fadeOut = TweenService:Create(SuccessLabel, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1, TextTransparency = 1})
-	fadeOut:Play()
-	fadeOut.Completed:Wait()
-	
-	SuccessLabel:Destroy()
-	
-	-- Hiện GUI chính
-	Main.Visible = true
-end
-
-------------------------------------------------
--- CHẠY LOADING SAU ĐÓ ẨN BẢNG HỒNG -> 2s -> THÔNG BÁO -> GUI CHÍNH
-------------------------------------------------
-
-task.spawn(function()
-	RunLoadingAnimation()
-	
-	-- Fade out bảng hồng
-	local fadeOut = TweenService:Create(LoadingBG, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
-	fadeOut:Play()
-	
-	for _, child in ipairs(LoadingBG:GetChildren()) do
-		if child:IsA("TextLabel") or child:IsA("Frame") then
-			local cFade = TweenService:Create(child, TweenInfo.new(0.3), {BackgroundTransparency = 1, TextTransparency = 1})
-			cFade:Play()
-		end
-	end
-	
-	task.wait(0.5)
-	LoadingBG:Destroy()
-	
-	-- Chờ 2 giây sau khi bảng hồng biến mất hoàn toàn
-	task.wait(2)
-	
-	-- Hiện thông báo "Loading thành công!" rồi GUI chính
-	ShowSuccessAndMainGUI()
-end)
-
-------------------------------------------------
--- KEY GUI (ẨN - sẽ không hiện ra nữa)
-------------------------------------------------
-
--- Key GUI vẫn giữ nhưng không hiển thị
 local KeyFrame = Instance.new("Frame")
 KeyFrame.Parent = ScreenGui
 KeyFrame.Size = UDim2.new(0,320,0,240)
@@ -248,7 +174,7 @@ KeyFrame.Position = UDim2.new(0.5,-160,0.3,0)
 KeyFrame.BackgroundColor3 = Color3.fromRGB(255,105,180)
 KeyFrame.Active = true
 KeyFrame.Draggable = true
-KeyFrame.Visible = false  -- Ẩn key GUI
+KeyFrame.Visible = false
 
 Instance.new("UICorner", KeyFrame).CornerRadius = UDim.new(0,18)
 
@@ -423,7 +349,6 @@ end
 if savedValue then
 	local valid, decoded = IsKeyValid(savedValue)
 	if valid then
-		-- Key hợp lệ: GUI chính đã được hiển thị qua ShowSuccessAndMainGUI
 		UpdateExpiryDisplay(decoded)
 		
 		task.spawn(function()
@@ -594,6 +519,21 @@ task.spawn(function()
 			end
 		end
 	end
+end)
+
+------------------------------------------------
+-- CHẠY LOADING -> ẨN BẢNG HỒNG -> HIỆN GUI CHÍNH NGAY LẬP TỨC
+------------------------------------------------
+
+task.spawn(function()
+	RunLoadingAnimation()
+	
+	-- Ẩn bảng hồng ngay lập tức (không fade, không chờ)
+	LoadingBG.Visible = false
+	LoadingBG:Destroy()
+	
+	-- Hiện GUI chính ngay lập tức
+	Main.Visible = true
 end)
 
 print("MIU HUB Loaded")
