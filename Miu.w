@@ -172,7 +172,7 @@ Mini.Draggable = true
 Instance.new("UICorner", Mini).CornerRadius = UDim.new(1,0)
 
 -- ẢNH ICON
-Mini.Image = "rbxassetid://7072719338"
+Mini.Image = "rbxassetid://135283977825181"
 
 ------------------------------------------------
 -- KEY MANAGEMENT FUNCTIONS
