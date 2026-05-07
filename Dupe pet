@@ -12,7 +12,7 @@ local DupeRemote = ReplicatedStorage.Shared.Packages.Network.ref_B_SellAll
 
 -- SETTINGS
 local AutoDupe = false
-local DupeInterval = 5  -- dupe mỗi 5 giây
+local DupeInterval = 1  -- dupe mỗi 1 giây
 
 -- GUI
 local ScreenGui = Instance.new("ScreenGui")
