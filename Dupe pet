@@ -1,0 +1,330 @@
+--// MIU HUB - Auto Dupe Items
+--// Mobile + PC
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local HttpService = game:GetService("HttpService")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- REMOTE DUPE
+local DupeRemote = ReplicatedStorage.Shared.Packages.Network.ref_B_SellAll
+
+-- SETTINGS
+local AutoDupe = false
+local DupeInterval = 5  -- dupe mỗi 5 giây
+
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MIU_HUB_DUPE"
+ScreenGui.Parent = game.CoreGui
+
+------------------------------------------------
+-- LOADING GUI
+------------------------------------------------
+
+local LoadingBG = Instance.new("Frame")
+LoadingBG.Parent = ScreenGui
+LoadingBG.Size = UDim2.new(0,350,0,200)
+LoadingBG.Position = UDim2.new(0.5,-175,0.5,-100)
+LoadingBG.BackgroundColor3 = Color3.fromRGB(255,105,180)
+LoadingBG.BorderSizePixel = 0
+LoadingBG.ZIndex = 100
+
+Instance.new("UICorner", LoadingBG).CornerRadius = UDim.new(0,20)
+
+local LoadingTitle = Instance.new("TextLabel")
+LoadingTitle.Parent = LoadingBG
+LoadingTitle.Size = UDim2.new(1,0,0,40)
+LoadingTitle.Position = UDim2.new(0,0,0.05,0)
+LoadingTitle.BackgroundTransparency = 1
+LoadingTitle.Text = "🔁 MIU DUPE"
+LoadingTitle.Font = Enum.Font.GothamBold
+LoadingTitle.TextSize = 28
+LoadingTitle.TextColor3 = Color3.new(1,1,1)
+LoadingTitle.ZIndex = 101
+
+local LoadingSubTitle = Instance.new("TextLabel")
+LoadingSubTitle.Parent = LoadingBG
+LoadingSubTitle.Size = UDim2.new(1,0,0,25)
+LoadingSubTitle.Position = UDim2.new(0,0,0.28,0)
+LoadingSubTitle.BackgroundTransparency = 1
+LoadingSubTitle.Text = "Loading..."
+LoadingSubTitle.Font = Enum.Font.Gotham
+LoadingSubTitle.TextSize = 16
+LoadingSubTitle.TextColor3 = Color3.fromRGB(255,255,200)
+LoadingSubTitle.ZIndex = 101
+
+local BarContainer = Instance.new("Frame")
+BarContainer.Parent = LoadingBG
+BarContainer.Size = UDim2.new(0.8,0,0,20)
+BarContainer.Position = UDim2.new(0.1,0,0.55,0)
+BarContainer.BackgroundColor3 = Color3.fromRGB(60,30,50)
+BarContainer.BorderSizePixel = 0
+BarContainer.ClipsDescendants = true
+BarContainer.ZIndex = 101
+
+Instance.new("UICorner", BarContainer).CornerRadius = UDim.new(0,10)
+
+local LoadingBar = Instance.new("Frame")
+LoadingBar.Parent = BarContainer
+LoadingBar.Size = UDim2.new(0,0,1,0)
+LoadingBar.BackgroundColor3 = Color3.fromRGB(50,220,100)
+LoadingBar.BorderSizePixel = 0
+LoadingBar.ZIndex = 102
+
+Instance.new("UICorner", LoadingBar).CornerRadius = UDim.new(0,10)
+
+local PercentLabel = Instance.new("TextLabel")
+PercentLabel.Parent = LoadingBG
+PercentLabel.Size = UDim2.new(1,0,0,30)
+PercentLabel.Position = UDim2.new(0,0,0.72,0)
+PercentLabel.BackgroundTransparency = 1
+PercentLabel.Text = "0%"
+PercentLabel.Font = Enum.Font.GothamBold
+PercentLabel.TextSize = 24
+PercentLabel.TextColor3 = Color3.new(1,1,1)
+PercentLabel.ZIndex = 101
+
+local LoadingStatus = Instance.new("TextLabel")
+LoadingStatus.Parent = LoadingBG
+LoadingStatus.Size = UDim2.new(1,0,0,20)
+LoadingStatus.Position = UDim2.new(0,0,0.88,0)
+LoadingStatus.BackgroundTransparency = 1
+LoadingStatus.Text = "Initializing..."
+LoadingStatus.Font = Enum.Font.Gotham
+LoadingStatus.TextSize = 13
+LoadingStatus.TextColor3 = Color3.fromRGB(200,200,200)
+LoadingStatus.ZIndex = 101
+
+------------------------------------------------
+-- LOADING ANIMATION
+------------------------------------------------
+
+local loadingSteps = {
+	{Percent = 10, Status = "Loading dupe modules..."},
+	{Percent = 25, Status = "Connecting to remote..."},
+	{Percent = 40, Status = "Preparing GUI..."},
+	{Percent = 60, Status = "Configuring auto-dupe..."},
+	{Percent = 80, Status = "Finalizing..."},
+	{Percent = 100, Status = "✅ MIU DUPE Loaded!"},
+}
+
+local function RunLoadingAnimation()
+	for _, step in ipairs(loadingSteps) do
+		local targetPercent = step.Percent
+		local startPercent = 0
+		
+		local currentBar = LoadingBar.Size.X.Offset
+		local currentWidth = BarContainer.AbsoluteSize.X
+		if currentWidth > 0 then
+			startPercent = math.floor((currentBar / currentWidth) * 100)
+		end
+		
+		local stepsToReach = math.max(1, math.floor((targetPercent - startPercent) / 2))
+		for i = 1, stepsToReach do
+			local progress = i / stepsToReach
+			local currentP = startPercent + (targetPercent - startPercent) * progress
+			local barWidth = (currentP / 100) * BarContainer.AbsoluteSize.X
+			
+			LoadingBar.Size = UDim2.new(0, barWidth, 1, 0)
+			PercentLabel.Text = math.floor(currentP) .. "%"
+			LoadingStatus.Text = step.Status
+			
+			task.wait(0.03)
+		end
+		
+		LoadingBar.Size = UDim2.new(0, (targetPercent / 100) * BarContainer.AbsoluteSize.X, 1, 0)
+		PercentLabel.Text = targetPercent .. "%"
+		LoadingStatus.Text = step.Status
+		
+		if targetPercent < 100 then
+			task.wait(0.08)
+		else
+			task.wait(0.5)
+		end
+	end
+end
+
+------------------------------------------------
+-- MAIN GUI
+------------------------------------------------
+
+local Main = Instance.new("Frame")
+Main.Parent = ScreenGui
+Main.Size = UDim2.new(0,240,0,160)
+Main.Position = UDim2.new(0.6,0,0.3,0)
+Main.BackgroundColor3 = Color3.fromRGB(255,105,180)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Draggable = true
+
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0,18)
+
+local Title = Instance.new("TextLabel")
+Title.Parent = Main
+Title.Size = UDim2.new(1,0,0,35)
+Title.BackgroundTransparency = 1
+Title.Text = "🔁 MIU DUPE"
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 22
+Title.TextColor3 = Color3.new(1,1,1)
+
+local Minimize = Instance.new("TextButton")
+Minimize.Parent = Main
+Minimize.Size = UDim2.new(0,30,0,30)
+Minimize.Position = UDim2.new(1,-35,0,5)
+Minimize.BackgroundColor3 = Color3.fromRGB(255,130,200)
+Minimize.Text = "-"
+Minimize.TextColor3 = Color3.new(1,1,1)
+Minimize.Font = Enum.Font.GothamBold
+Minimize.TextSize = 22
+
+Instance.new("UICorner", Minimize).CornerRadius = UDim.new(1,0)
+
+-- TOGGLE AUTO DUPE
+local ToggleDupe = Instance.new("TextButton")
+ToggleDupe.Parent = Main
+ToggleDupe.Size = UDim2.new(0.8,0,0,45)
+ToggleDupe.Position = UDim2.new(0.1,0,0.3,0)
+ToggleDupe.BackgroundColor3 = Color3.fromRGB(255,130,200)
+ToggleDupe.Text = "AUTO DUPE : OFF"
+ToggleDupe.TextColor3 = Color3.new(1,1,1)
+ToggleDupe.Font = Enum.Font.GothamBold
+ToggleDupe.TextSize = 18
+
+Instance.new("UICorner", ToggleDupe).CornerRadius = UDim.new(0,14)
+
+-- NÚT DUPE THỦ CÔNG
+local DupeNowBtn = Instance.new("TextButton")
+DupeNowBtn.Parent = Main
+DupeNowBtn.Size = UDim2.new(0.8,0,0,35)
+DupeNowBtn.Position = UDim2.new(0.1,0,0.6,0)
+DupeNowBtn.BackgroundColor3 = Color3.fromRGB(50,220,100)
+DupeNowBtn.Text = "🔁 DUPE NOW"
+DupeNowBtn.TextColor3 = Color3.new(1,1,1)
+DupeNowBtn.Font = Enum.Font.GothamBold
+DupeNowBtn.TextSize = 18
+
+Instance.new("UICorner", DupeNowBtn).CornerRadius = UDim.new(0,12)
+
+-- STATUS LABEL
+local StatusDupe = Instance.new("TextLabel")
+StatusDupe.Parent = Main
+StatusDupe.Size = UDim2.new(1,0,0,18)
+StatusDupe.Position = UDim2.new(0,0,0.85,0)
+StatusDupe.BackgroundTransparency = 1
+StatusDupe.Text = "⏳ Idle..."
+StatusDupe.Font = Enum.Font.Gotham
+StatusDupe.TextSize = 13
+StatusDupe.TextColor3 = Color3.fromRGB(255,255,200)
+
+-- MINI BUTTON
+local Mini = Instance.new("ImageButton")
+Mini.Parent = ScreenGui
+Mini.Size = UDim2.new(0,55,0,55)
+Mini.Position = UDim2.new(0.9,0,0.4,0)
+Mini.BackgroundColor3 = Color3.fromRGB(255,105,180)
+Mini.Visible = false
+Mini.Active = true
+Mini.Draggable = true
+
+Instance.new("UICorner", Mini).CornerRadius = UDim.new(1,0)
+
+Mini.Image = "rbxassetid://135283977825181"
+
+------------------------------------------------
+-- HÀM DUPE ĐỒ
+------------------------------------------------
+
+local function DupeItems()
+	local success, result = pcall(function()
+		return DupeRemote:InvokeServer()
+	end)
+	
+	if success then
+		if result then
+			StatusDupe.Text = "✅ Dupe success! " .. tostring(result)
+		else
+			StatusDupe.Text = "✅ Dupe completed!"
+		end
+	else
+		StatusDupe.Text = "❌ Dupe failed: " .. tostring(result)
+	end
+	
+	return success
+end
+
+------------------------------------------------
+-- MINIMIZE / RESTORE
+------------------------------------------------
+
+Minimize.MouseButton1Click:Connect(function()
+	Main.Visible = false
+	Mini.Visible = true
+end)
+
+Mini.MouseButton1Click:Connect(function()
+	Main.Visible = true
+	Mini.Visible = false
+end)
+
+------------------------------------------------
+-- TOGGLE AUTO DUPE
+------------------------------------------------
+
+ToggleDupe.MouseButton1Click:Connect(function()
+	AutoDupe = not AutoDupe
+
+	if AutoDupe then
+		ToggleDupe.Text = "AUTO DUPE : ON"
+		ToggleDupe.BackgroundColor3 = Color3.fromRGB(255,80,170)
+		StatusDupe.Text = "🟢 Auto dupe every " .. DupeInterval .. "s"
+	else
+		ToggleDupe.Text = "AUTO DUPE : OFF"
+		ToggleDupe.BackgroundColor3 = Color3.fromRGB(255,130,200)
+		StatusDupe.Text = "⏳ Idle..."
+	end
+end)
+
+------------------------------------------------
+-- DUPE NOW BUTTON
+------------------------------------------------
+
+DupeNowBtn.MouseButton1Click:Connect(function()
+	StatusDupe.Text = "⏳ Duping..."
+	DupeItems()
+end)
+
+------------------------------------------------
+-- AUTO DUPE LOOP
+------------------------------------------------
+
+task.spawn(function()
+	while task.wait(DupeInterval) do
+		if AutoDupe then
+			DupeItems()
+		end
+	end
+end)
+
+------------------------------------------------
+-- CHẠY LOADING -> HIỆN MAIN
+------------------------------------------------
+
+task.spawn(function()
+	RunLoadingAnimation()
+	
+	-- Ẩn loading
+	LoadingBG.Visible = false
+	LoadingBG:Destroy()
+	
+	-- Hiện GUI chính
+	Main.Visible = true
+end)
+
+print("========================================")
+print("MIU HUB - Auto Dupe Loaded!")
+print("Remote:", DupeRemote:GetFullName())
+print("Auto dupe interval:", DupeInterval, "seconds")
+print("========================================")
