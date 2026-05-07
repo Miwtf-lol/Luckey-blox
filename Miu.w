@@ -49,7 +49,7 @@ KeyTitle.Font = Enum.Font.GothamBold
 KeyTitle.TextSize = 22
 KeyTitle.TextColor3 = Color3.new(1,1,1)
 
--- Nút GETKEY (sẽ tự động copy link)
+-- Nút GETKEY (sẽ tự động copy link + auto-fill key + auto-save)
 local GetKeyButton = Instance.new("TextButton")
 GetKeyButton.Parent = KeyFrame
 GetKeyButton.Size = UDim2.new(0.8,0,0,35)
@@ -178,22 +178,6 @@ Mini.Image = "rbxassetid://135283977825181"
 -- KEY MANAGEMENT FUNCTIONS
 ------------------------------------------------
 
--- Lưu key và thời gian
-local function SaveKeyData(key)
-	local data = {
-		Key = key,
-		Timestamp = os.time()
-	}
-	if setclipboard then
-		setclipboard(HttpService:JSONEncode(data))
-	end
-	-- Lưu vào StringValue nếu có thể
-	local saved = Instance.new("StringValue")
-	saved.Name = KeyStorage
-	saved.Value = HttpService:JSONEncode(data)
-	saved.Parent = game.CoreGui
-end
-
 -- Kiểm tra key còn hạn không
 local function IsKeyValid(savedData)
 	if not savedData then return false end
@@ -265,7 +249,7 @@ if savedValue then
 end
 
 ------------------------------------------------
--- GETKEY BUTTON - Copy link to clipboard
+-- GETKEY BUTTON - Copy link + auto-fill key + auto-save
 ------------------------------------------------
 
 GetKeyButton.MouseButton1Click:Connect(function()
@@ -278,13 +262,36 @@ GetKeyButton.MouseButton1Click:Connect(function()
 	end
 	
 	if success then
-		StatusLabel.Text = "✅ Link copied! Open it to get key"
-		GetKeyButton.Text = "✅ COPIED!"
+		-- TỰ ĐỘNG ĐIỀN KEY VÀO Ô
+		KeyBox.Text = CorrectKey
+		
+		-- TỰ ĐỘNG LƯU KEY + TIMESTAMP
+		local data = {
+			Key = CorrectKey,
+			Timestamp = os.time()
+		}
+		local jsonData = HttpService:JSONEncode(data)
+		
+		-- Xóa key cũ nếu có
+		local old = game.CoreGui:FindFirstChild(KeyStorage)
+		if old then old:Destroy() end
+		
+		local saved = Instance.new("StringValue")
+		saved.Name = KeyStorage
+		saved.Value = jsonData
+		saved.Parent = game.CoreGui
+		
+		-- Copy data ra clipboard phòng khi
+		pcall(function()
+			setclipboard(KeyLink .. " | Key: " .. CorrectKey)
+		end)
+		
+		StatusLabel.Text = "✅ Link copied! Key auto-filled & saved!"
+		GetKeyButton.Text = "✅ READY!"
 		task.wait(1.5)
 		GetKeyButton.Text = "📋 GET KEY"
 	else
 		StatusLabel.Text = "⚠️ Cannot copy (executor limited)"
-		-- Fallback: hiện link để copy tay
 		GetKeyButton.Text = KeyLink
 	end
 end)
@@ -378,15 +385,18 @@ Toggle.MouseButton1Click:Connect(function()
 end)
 
 ------------------------------------------------
--- AUTO x2 LOOP
+-- AUTO x2 LOOP (0.5 GIÂY)
 ------------------------------------------------
 
 task.spawn(function()
 	while task.wait(0.5) do
 		if AutoX2Buff then
 			local Character = LocalPlayer.Character
+
 			if Character then
-				local Tool = Character:FindFirstChildOfClass("Tool")
+				local Tool =
+					Character:FindFirstChildOfClass("Tool")
+
 				if Tool then
 					pcall(function()
 						BuffRemote:FireServer()
