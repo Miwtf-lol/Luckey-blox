@@ -5,6 +5,8 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -24,6 +26,171 @@ local AutoX2Buff = false
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MIU_HUB"
 ScreenGui.Parent = game.CoreGui
+
+------------------------------------------------
+-- LOADING GUI
+------------------------------------------------
+
+local LoadingFrame = Instance.new("Frame")
+LoadingFrame.Parent = ScreenGui
+LoadingFrame.Size = UDim2.new(1,0,1,0)
+LoadingFrame.Position = UDim2.new(0,0,0,0)
+LoadingFrame.BackgroundColor3 = Color3.fromRGB(10,10,10)
+LoadingFrame.BackgroundTransparency = 0
+LoadingFrame.ZIndex = 100
+
+local LoadingBG = Instance.new("Frame")
+LoadingBG.Parent = LoadingFrame
+LoadingBG.Size = UDim2.new(0,350,0,200)
+LoadingBG.Position = UDim2.new(0.5,-175,0.5,-100)
+LoadingBG.BackgroundColor3 = Color3.fromRGB(255,105,180)
+LoadingBG.BackgroundTransparency = 0
+LoadingBG.BorderSizePixel = 0
+
+Instance.new("UICorner", LoadingBG).CornerRadius = UDim.new(0,20)
+
+local LoadingTitle = Instance.new("TextLabel")
+LoadingTitle.Parent = LoadingBG
+LoadingTitle.Size = UDim2.new(1,0,0,40)
+LoadingTitle.Position = UDim2.new(0,0,0.05,0)
+LoadingTitle.BackgroundTransparency = 1
+LoadingTitle.Text = "🔑 MIU HUB"
+LoadingTitle.Font = Enum.Font.GothamBold
+LoadingTitle.TextSize = 28
+LoadingTitle.TextColor3 = Color3.new(1,1,1)
+
+local LoadingSubTitle = Instance.new("TextLabel")
+LoadingSubTitle.Parent = LoadingBG
+LoadingSubTitle.Size = UDim2.new(1,0,0,25)
+LoadingSubTitle.Position = UDim2.new(0,0,0.28,0)
+LoadingSubTitle.BackgroundTransparency = 1
+LoadingSubTitle.Text = "Loading..."
+LoadingSubTitle.Font = Enum.Font.Gotham
+LoadingSubTitle.TextSize = 16
+LoadingSubTitle.TextColor3 = Color3.fromRGB(255,255,200)
+
+-- Thanh loading
+local BarContainer = Instance.new("Frame")
+BarContainer.Parent = LoadingBG
+BarContainer.Size = UDim2.new(0.8,0,0,20)
+BarContainer.Position = UDim2.new(0.1,0,0.55,0)
+BarContainer.BackgroundColor3 = Color3.fromRGB(60,30,50)
+BarContainer.BorderSizePixel = 0
+BarContainer.ClipsDescendants = true
+
+Instance.new("UICorner", BarContainer).CornerRadius = UDim.new(0,10)
+
+local LoadingBar = Instance.new("Frame")
+LoadingBar.Parent = BarContainer
+LoadingBar.Size = UDim2.new(0,0,1,0)
+LoadingBar.BackgroundColor3 = Color3.fromRGB(50,220,100)
+LoadingBar.BorderSizePixel = 0
+
+Instance.new("UICorner", LoadingBar).CornerRadius = UDim.new(0,10)
+
+-- Label phần trăm
+local PercentLabel = Instance.new("TextLabel")
+PercentLabel.Parent = LoadingBG
+PercentLabel.Size = UDim2.new(1,0,0,30)
+PercentLabel.Position = UDim2.new(0,0,0.72,0)
+PercentLabel.BackgroundTransparency = 1
+PercentLabel.Text = "0%"
+PercentLabel.Font = Enum.Font.GothamBold
+PercentLabel.TextSize = 24
+PercentLabel.TextColor3 = Color3.new(1,1,1)
+
+local LoadingStatus = Instance.new("TextLabel")
+LoadingStatus.Parent = LoadingBG
+LoadingStatus.Size = UDim2.new(1,0,0,20)
+LoadingStatus.Position = UDim2.new(0,0,0.88,0)
+LoadingStatus.BackgroundTransparency = 1
+LoadingStatus.Text = "Initializing..."
+LoadingStatus.Font = Enum.Font.Gotham
+LoadingStatus.TextSize = 13
+LoadingStatus.TextColor3 = Color3.fromRGB(200,200,200)
+
+------------------------------------------------
+-- LOADING ANIMATION
+------------------------------------------------
+
+-- Danh sách các bước loading
+local loadingSteps = {
+	{Percent = 5,  Status = "Loading script modules..."},
+	{Percent = 10, Status = "Verifying dependencies..."},
+	{Percent = 18, Status = "Initializing GUI system..."},
+	{Percent = 25, Status = "Building interface elements..."},
+	{Percent = 33, Status = "Configuring key system..."},
+	{Percent = 40, Status = "Loading network remotes..."},
+	{Percent = 50, Status = "Checking saved keys..."},
+	{Percent = 58, Status = "Preparing auto-farm modules..."},
+	{Percent = 65, Status = "Setting up event handlers..."},
+	{Percent = 73, Status = "Optimizing performance..."},
+	{Percent = 80, Status = "Finalizing UI components..."},
+	{Percent = 88, Status = "Running security checks..."},
+	{Percent = 95, Status = "Almost done..."},
+	{Percent = 100, Status = "✅ MIU HUB Loaded!"},
+}
+
+local function RunLoadingAnimation()
+	for _, step in ipairs(loadingSteps) do
+		local targetPercent = step.Percent
+		local startPercent = 0
+		
+		-- Lấy % hiện tại
+		local currentBar = LoadingBar.Size.X.Offset
+		local currentWidth = BarContainer.AbsoluteSize.X
+		if currentWidth > 0 then
+			startPercent = math.floor((currentBar / currentWidth) * 100)
+		end
+		
+		-- Animation mượt từ % hiện tại đến target
+		local stepsToReach = math.max(1, math.floor((targetPercent - startPercent) / 2))
+		for i = 1, stepsToReach do
+			local progress = i / stepsToReach
+			local currentP = startPercent + (targetPercent - startPercent) * progress
+			local barWidth = (currentP / 100) * BarContainer.AbsoluteSize.X
+			
+			LoadingBar.Size = UDim2.new(0, barWidth, 1, 0)
+			PercentLabel.Text = math.floor(currentP) .. "%"
+			LoadingStatus.Text = step.Status
+			
+			task.wait(0.03)
+		end
+		
+		-- Snap chính xác đến target
+		LoadingBar.Size = UDim2.new(0, (targetPercent / 100) * BarContainer.AbsoluteSize.X, 1, 0)
+		PercentLabel.Text = targetPercent .. "%"
+		LoadingStatus.Text = step.Status
+		
+		if targetPercent < 100 then
+			task.wait(0.08)
+		else
+			task.wait(0.5)
+		end
+	end
+end
+
+------------------------------------------------
+-- CHẠY LOADING SAU ĐÓ ẨN
+------------------------------------------------
+
+task.spawn(function()
+	RunLoadingAnimation()
+	
+	-- Ẩn loading với hiệu ứng
+	local fadeOut = TweenService:Create(LoadingFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
+	fadeOut:Play()
+	
+	for _, child in ipairs(LoadingBG:GetChildren()) do
+		if child:IsA("TextLabel") or child:IsA("Frame") then
+			local cFade = TweenService:Create(child, TweenInfo.new(0.3), {BackgroundTransparency = 1, TextTransparency = 1})
+			cFade:Play()
+		end
+	end
+	
+	task.wait(0.5)
+	LoadingFrame:Destroy()
+end)
 
 ------------------------------------------------
 -- KEY GUI
@@ -385,11 +552,11 @@ Toggle.MouseButton1Click:Connect(function()
 end)
 
 ------------------------------------------------
--- AUTO x2 LOOP (0.5 GIÂY)
+-- AUTO x2 LOOP (0.3 GIÂY)
 ------------------------------------------------
 
 task.spawn(function()
-	while task.wait(0.5) do
+	while task.wait(0.3) do
 		if AutoX2Buff then
 			local Character = LocalPlayer.Character
 
