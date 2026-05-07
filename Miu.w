@@ -1,3 +1,5 @@
+-- Bảng loading sẽ biến mất hoàn toàn và không hiện 1 cái gì hết và sau khi bảng màu hồng biến mất thì 2s sau sẽ hiện thông báo loading thành công và GUI chính sẽ xuất hiện --//
+
 --// MIU HUB - Auto x2 Buff + Key System
 --// Mobile + PC
 
@@ -164,7 +166,50 @@ local function RunLoadingAnimation()
 end
 
 ------------------------------------------------
--- CHẠY LOADING SAU ĐÓ ẨN BẢNG HỒNG
+-- THÔNG BÁO LOADING THÀNH CÔNG + GUI CHÍNH
+------------------------------------------------
+
+local function ShowSuccessAndMainGUI()
+	-- Tạo thông báo "Loading thành công!"
+	local SuccessLabel = Instance.new("TextLabel")
+	SuccessLabel.Parent = ScreenGui
+	SuccessLabel.Size = UDim2.new(0,300,0,60)
+	SuccessLabel.Position = UDim2.new(0.5,-150,0.5,-30)
+	SuccessLabel.BackgroundColor3 = Color3.fromRGB(255,105,180)
+	SuccessLabel.BackgroundTransparency = 1
+	SuccessLabel.Text = "✅ LOADING THÀNH CÔNG!"
+	SuccessLabel.Font = Enum.Font.GothamBold
+	SuccessLabel.TextSize = 26
+	SuccessLabel.TextColor3 = Color3.new(1,1,1)
+	SuccessLabel.ZIndex = 200
+	
+	local uc = Instance.new("UICorner", SuccessLabel)
+	uc.CornerRadius = UDim.new(0,16)
+	
+	-- Hiệu ứng fade in
+	SuccessLabel.BackgroundTransparency = 1
+	SuccessLabel.TextTransparency = 1
+	task.wait(0.05)
+	
+	local fadeIn = TweenService:Create(SuccessLabel, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0, TextTransparency = 0})
+	fadeIn:Play()
+	fadeIn.Completed:Wait()
+	
+	task.wait(1.2)
+	
+	-- Fade out
+	local fadeOut = TweenService:Create(SuccessLabel, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1, TextTransparency = 1})
+	fadeOut:Play()
+	fadeOut.Completed:Wait()
+	
+	SuccessLabel:Destroy()
+	
+	-- Hiện GUI chính
+	Main.Visible = true
+end
+
+------------------------------------------------
+-- CHẠY LOADING SAU ĐÓ ẨN BẢNG HỒNG -> 2s -> THÔNG BÁO -> GUI CHÍNH
 ------------------------------------------------
 
 task.spawn(function()
@@ -183,12 +228,19 @@ task.spawn(function()
 	
 	task.wait(0.5)
 	LoadingBG:Destroy()
+	
+	-- Chờ 2 giây sau khi bảng hồng biến mất hoàn toàn
+	task.wait(2)
+	
+	-- Hiện thông báo "Loading thành công!" rồi GUI chính
+	ShowSuccessAndMainGUI()
 end)
 
 ------------------------------------------------
--- KEY GUI
+-- KEY GUI (ẨN - sẽ không hiện ra nữa)
 ------------------------------------------------
 
+-- Key GUI vẫn giữ nhưng không hiển thị
 local KeyFrame = Instance.new("Frame")
 KeyFrame.Parent = ScreenGui
 KeyFrame.Size = UDim2.new(0,320,0,240)
@@ -196,6 +248,7 @@ KeyFrame.Position = UDim2.new(0.5,-160,0.3,0)
 KeyFrame.BackgroundColor3 = Color3.fromRGB(255,105,180)
 KeyFrame.Active = true
 KeyFrame.Draggable = true
+KeyFrame.Visible = false  -- Ẩn key GUI
 
 Instance.new("UICorner", KeyFrame).CornerRadius = UDim.new(0,18)
 
@@ -209,7 +262,6 @@ KeyTitle.Font = Enum.Font.GothamBold
 KeyTitle.TextSize = 22
 KeyTitle.TextColor3 = Color3.new(1,1,1)
 
--- Nút GETKEY
 local GetKeyButton = Instance.new("TextButton")
 GetKeyButton.Parent = KeyFrame
 GetKeyButton.Size = UDim2.new(0.8,0,0,35)
@@ -371,8 +423,7 @@ end
 if savedValue then
 	local valid, decoded = IsKeyValid(savedValue)
 	if valid then
-		KeyFrame.Visible = false
-		Main.Visible = true
+		-- Key hợp lệ: GUI chính đã được hiển thị qua ShowSuccessAndMainGUI
 		UpdateExpiryDisplay(decoded)
 		
 		task.spawn(function()
@@ -523,11 +574,11 @@ Toggle.MouseButton1Click:Connect(function()
 end)
 
 ------------------------------------------------
--- AUTO x2 LOOP (0.3 GIÂY)
+-- AUTO x2 LOOP (0.2 GIÂY)
 ------------------------------------------------
 
 task.spawn(function()
-	while task.wait(0.3) do
+	while task.wait(0.2) do
 		if AutoX2Buff then
 			local Character = LocalPlayer.Character
 
