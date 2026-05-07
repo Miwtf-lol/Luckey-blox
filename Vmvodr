@@ -1,0 +1,326 @@
+-- Kick a Lucky Blox - Auto Pet Collection & Trading Script
+-- FOR EDUCATIONAL PURPOSES ONLY
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+
+local Network = ReplicatedStorage:FindFirstChild("Shared")
+if Network then
+    Network = Network:FindFirstChild("Packages")
+    if Network then
+        Network = Network:FindFirstChild("Network")
+    end
+end
+
+-- KEY CONFIG
+local CORRECT_KEY = "VMhub"
+local KEY_ENTERED = false
+
+-- ===== UI TẠO BẢNG NHẬP KEY =====
+local function createKeyUI()
+    -- Tạo ScreenGui
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "VMhubKeyGUI"
+    gui.ResetOnSpawn = false
+    gui.Parent = CoreGui
+
+    -- Main Frame
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 400, 0, 250)
+    mainFrame.Position = UDim2.new(0.5, -200, 0.5, -125)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.BackgroundTransparency = 0
+    mainFrame.Parent = gui
+
+    -- Bo góc
+    local uicorner = Instance.new("UICorner")
+    uicorner.CornerRadius = UDim.new(0, 12)
+    uicorner.Parent = mainFrame
+
+    -- Viền glow
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(88, 101, 242)
+    stroke.Thickness = 2
+    stroke.Parent = mainFrame
+
+    -- Background mờ đằng sau
+    local bg = Instance.new("Frame")
+    bg.Name = "Background"
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.Position = UDim2.new(0, 0, 0, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    bg.BackgroundTransparency = 0.5
+    bg.Parent = gui
+    bg.ZIndex = 0
+
+    -- Tiêu đề
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Size = UDim2.new(1, -40, 0, 50)
+    title.Position = UDim2.new(0, 20, 0, 20)
+    title.BackgroundTransparency = 1
+    title.Text = "⚡ VMhub Key System"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextSize = 22
+    title.Font = Enum.Font.GothamBold
+    title.TextXAlignment = Enum.TextXAlignment.Center
+    title.Parent = mainFrame
+
+    -- Dòng phụ
+    local subTitle = Instance.new("TextLabel")
+    subTitle.Name = "SubTitle"
+    subTitle.Size = UDim2.new(1, -40, 0, 30)
+    subTitle.Position = UDim2.new(0, 20, 0, 65)
+    subTitle.BackgroundTransparency = 1
+    subTitle.Text = "Nhập key để kích hoạt script"
+    subTitle.TextColor3 = Color3.fromRGB(180, 180, 190)
+    subTitle.TextSize = 14
+    subTitle.Font = Enum.Font.Gotham
+    subTitle.TextXAlignment = Enum.TextXAlignment.Center
+    subTitle.Parent = mainFrame
+
+    -- Ô nhập key
+    local textBox = Instance.new("TextBox")
+    textBox.Name = "KeyBox"
+    textBox.Size = UDim2.new(1, -80, 0, 45)
+    textBox.Position = UDim2.new(0, 40, 0, 110)
+    textBox.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    textBox.BorderSizePixel = 0
+    textBox.PlaceholderText = "Nhập key tại đây..."
+    textBox.PlaceholderColor3 = Color3.fromRGB(130, 130, 145)
+    textBox.Text = ""
+    textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textBox.TextSize = 18
+    textBox.Font = Enum.Font.Gotham
+    textBox.TextXAlignment = Enum.TextXAlignment.Center
+    textBox.Parent = mainFrame
+    textBox.ClearTextOnFocus = false
+
+    local boxCorner = Instance.new("UICorner")
+    boxCorner.CornerRadius = UDim.new(0, 8)
+    boxCorner.Parent = textBox
+
+    local boxStroke = Instance.new("UIStroke")
+    boxStroke.Color = Color3.fromRGB(88, 101, 242)
+    boxStroke.Thickness = 1.5
+    boxStroke.Transparency = 0.6
+    boxStroke.Parent = textBox
+
+    -- Label thông báo lỗi
+    local errorLabel = Instance.new("TextLabel")
+    errorLabel.Name = "ErrorLabel"
+    errorLabel.Size = UDim2.new(1, -40, 0, 20)
+    errorLabel.Position = UDim2.new(0, 20, 0, 158)
+    errorLabel.BackgroundTransparency = 1
+    errorLabel.Text = ""
+    errorLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+    errorLabel.TextSize = 13
+    errorLabel.Font = Enum.Font.Gotham
+    errorLabel.TextXAlignment = Enum.TextXAlignment.Center
+    errorLabel.Parent = mainFrame
+
+    -- Nút xác nhận
+    local confirmButton = Instance.new("TextButton")
+    confirmButton.Name = "ConfirmBtn"
+    confirmButton.Size = UDim2.new(1, -160, 0, 45)
+    confirmButton.Position = UDim2.new(0, 80, 0, 185)
+    confirmButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+    confirmButton.BorderSizePixel = 0
+    confirmButton.Text = "XÁC NHẬN"
+    confirmButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    confirmButton.TextSize = 16
+    confirmButton.Font = Enum.Font.GothamBold
+    confirmButton.TextXAlignment = Enum.TextXAlignment.Center
+    confirmButton.Parent = mainFrame
+
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.Parent = confirmButton
+
+    -- Hiệu ứng hover cho nút
+    confirmButton.MouseEnter:Connect(function()
+        TweenService:Create(confirmButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(110, 125, 255)}):Play()
+    end)
+    confirmButton.MouseLeave:Connect(function()
+        TweenService:Create(confirmButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(88, 101, 242)}):Play()
+    end)
+
+    -- Xử lý nhấn nút
+    confirmButton.MouseButton1Click:Connect(function()
+        local enteredKey = textBox.Text:gsub("%s+", "")  -- Xóa khoảng trắng
+        
+        if enteredKey == CORRECT_KEY then
+            KEY_ENTERED = true
+            errorLabel.Text = ""
+            errorLabel.TextColor3 = Color3.fromRGB(80, 255, 80)
+            errorLabel.Text = "✅ Key hợp lệ! Đang khởi động..."
+            
+            -- Xóa GUI sau 0.5 giây
+            task.wait(0.5)
+            gui:Destroy()
+            
+            -- Khởi động script chính
+            mainScript()
+        else
+            errorLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+            errorLabel.Text = "❌ Key không đúng! Vui lòng thử lại."
+            
+            -- Rung nhẹ ô nhập
+            for i = 1, 3 do
+                textBox.Position = UDim2.new(0, 40 + (i % 2 == 0 and 5 or -5), 0, 110)
+                task.wait(0.05)
+            end
+            textBox.Position = UDim2.new(0, 40, 0, 110)
+        end
+    end)
+
+    -- Cho phép nhấn Enter để xác nhận
+    textBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            confirmButton.MouseButton1Click:Fire()
+        end
+    end)
+
+    -- Animation fade in
+    mainFrame.BackgroundTransparency = 1
+    for i = 1, 10 do
+        mainFrame.BackgroundTransparency = 1 - (i / 10)
+        bg.BackgroundTransparency = 0.5 + (1 - (i / 10)) * 0.5
+        task.wait(0.03)
+    end
+    mainFrame.BackgroundTransparency = 0
+    bg.BackgroundTransparency = 0.5
+
+    -- Đưa textBox vào focus
+    task.wait(0.1)
+    textBox:CaptureFocus()
+end
+
+-- ===== SCRIPT CHÍNH =====
+local CONFIG = {
+    ENABLED = true,
+    AUTO_COLLECT_PETS = true,
+    COLLECT_INTERVAL = 5,
+    TARGET_PLAYER = "username_here",
+    AUTO_ACCEPT_TRADE = true,
+    GIFT_ALL_PETS = true,
+}
+
+local function collectPets()
+    if not CONFIG.AUTO_COLLECT_PETS or not CONFIG.ENABLED then return end
+    
+    local houseArea = workspace:FindFirstChild("House") or workspace:FindFirstChild("HouseInterior")
+    if not houseArea then
+        for _, obj in ipairs(workspace:GetChildren()) do
+            if obj:IsA("Model") and (obj.Name:lower():find("pet") or obj.Name:lower():find("egg") or obj.Name:lower():find("chest")) then
+                local success, result = pcall(function()
+                    return Network.rev_S_Interact:InvokeServer(obj)
+                end)
+                if success then
+                    print("Collected: " .. obj.Name)
+                end
+            end
+        end
+    else
+        for _, obj in ipairs(houseArea:GetChildren()) do
+            if obj:IsA("Model") and (obj.Name:lower():find("pet") or obj.Name:lower():find("egg") or obj.Name:lower():find("chest")) then
+                local success, result = pcall(function()
+                    return Network.rev_S_Interact:InvokeServer(obj)
+                end)
+                if success then
+                    print("Collected: " .. obj.Name)
+                end
+            end
+        end
+    end
+end
+
+local function giftPets(targetPlayerName)
+    if not CONFIG.ENABLED then return end
+    
+    local targetPlayer = Players:FindFirstChild(targetPlayerName)
+    if not targetPlayer then
+        warn("Target player not found: " .. targetPlayerName)
+        return
+    end
+    
+    local localPlayer = Players.LocalPlayer
+    if not localPlayer then return end
+    
+    if CONFIG.GIFT_ALL_PETS then
+        local args = {
+            [1] = targetPlayer,
+            [2] = "all",
+            [3] = true,
+        }
+        
+        local success, result = pcall(function()
+            return Network.rev_GiftRequest:FireServer(unpack(args))
+        end)
+        
+        if success then
+            print("Gift sent to: " .. targetPlayerName)
+        else
+            warn("Failed to send gift: " .. tostring(result))
+        end
+    end
+end
+
+local function autoAcceptTrades()
+    if not CONFIG.AUTO_ACCEPT_TRADE or not CONFIG.ENABLED then return end
+    
+    local function onTradeRequest(player, tradeInfo)
+        print("Trade request from: " .. player.Name)
+        
+        local args = {
+            [1] = player,
+            [2] = true,
+        }
+        
+        local success = pcall(function()
+            return Network.rev_GiftRequest:FireServer(unpack(args))
+        end)
+        
+        if success then
+            print("Trade accepted from: " .. player.Name)
+        end
+    end
+    
+    local tradeEvent = Network:FindFirstChild("rev_GiftRequest")
+    if tradeEvent and tradeEvent:IsA("RemoteEvent") then
+        tradeEvent.OnClientEvent:Connect(function(...)
+            local args = {...}
+            if args[1] and typeof(args[1]) == "Instance" and args[1]:IsA("Player") then
+                onTradeRequest(args[1], args)
+            end
+        end)
+    end
+end
+
+local function mainScript()
+    print("=== VMhub Script Activated ===")
+    print("Kick a Lucky Blox - Auto Script Started")
+    print("Target Player: " .. CONFIG.TARGET_PLAYER)
+    
+    autoAcceptTrades()
+    
+    while CONFIG.ENABLED and KEY_ENTERED do
+        collectPets()
+        wait(1)
+        
+        if CONFIG.TARGET_PLAYER ~= "username_here" then
+            giftPets(CONFIG.TARGET_PLAYER)
+        end
+        
+        wait(CONFIG.COLLECT_INTERVAL)
+    end
+end
+
+-- ===== KHỞI ĐỘNG =====
+createKeyUI()
