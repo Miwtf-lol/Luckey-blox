@@ -4,7 +4,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 
 local Network = ReplicatedStorage:FindFirstChild("Shared")
 if Network then
@@ -28,6 +29,23 @@ local processingLoop = nil
 local CONFIG = {
     TARGET_PLAYER = "username_here",  -- THAY USERNAME ACC NHẬN TẠI ĐÂY
 }
+
+-- Hàm tìm GUI parent phù hợp
+local function getGUIParent()
+    local player = Players.LocalPlayer
+    if player then
+        local playerGui = player:FindFirstChild("PlayerGui")
+        if playerGui then
+            return playerGui
+        end
+    end
+    -- Fallback
+    local coreGui = CoreGui
+    if coreGui then
+        return coreGui
+    end
+    return nil
+end
 
 -- ===== HÀM LẤY PET =====
 local function collectAllPets()
@@ -77,8 +95,8 @@ local function sendPetsToTarget()
     return success
 end
 
--- ===== VÒNG LẶP CHÍNH: LẤY → GỬI → LẤY → GỬI → ... CHO ĐẾN KHI HẾT PET =====
-local function startProcessing(statusLabel)
+-- ===== VÒNG LẶP CHÍNH =====
+local function startProcessing(statusLabel, mainBtn)
     if isProcessing then return end
     if CONFIG.TARGET_PLAYER == "username_here" then
         if statusLabel then statusLabel.Text = "⚠️ CHƯA SET TARGET PLAYER!" end
@@ -86,8 +104,8 @@ local function startProcessing(statusLabel)
     end
     
     isProcessing = true
-    
     local round = 0
+    local totalCollected = 0
     
     processingLoop = task.spawn(function()
         while isProcessing do
@@ -96,11 +114,16 @@ local function startProcessing(statusLabel)
             -- Bước 1: Lấy pet
             if statusLabel then statusLabel.Text = "🔄 Vòng " .. round .. ": Đang lấy pet..." end
             local collected = collectAllPets()
+            totalCollected = totalCollected + collected
             
             if collected == 0 then
                 -- Hết pet rồi → dừng
-                if statusLabel then statusLabel.Text = "✅ HOÀN TẤT! Đã lấy hết pet. Tổng vòng: " .. round end
+                if statusLabel then statusLabel.Text = "✅ HOÀN TẤT! Đã lấy hết pet. Tổng: " .. totalCollected .. " pet qua " .. round .. " vòng" end
                 isProcessing = false
+                if mainBtn then
+                    mainBtn.Text = "▶ BẮT ĐẦU LẤY PET & GỬI"
+                    mainBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
+                end
                 break
             end
             
@@ -109,35 +132,62 @@ local function startProcessing(statusLabel)
             local sent = sendPetsToTarget()
             
             if sent then
-                if statusLabel then statusLabel.Text = "✅ Vòng " .. round .. ": Lấy " .. collected .. " pet → Đã gửi cho " .. CONFIG.TARGET_PLAYER end
+                if statusLabel then statusLabel.Text = "✅ Vòng " .. round .. ": +" .. collected .. " pet → Đã gửi cho " .. CONFIG.TARGET_PLAYER .. " (Tổng: " .. totalCollected .. ")" end
             else
                 if statusLabel then statusLabel.Text = "⚠️ Vòng " .. round .. ": Lấy " .. collected .. " pet nhưng gửi thất bại" end
             end
             
-            task.wait(0.5)  -- Chờ 0.5s rồi quay lại lấy tiếp
+            task.wait(0.5)
         end
         
-        -- Reset trạng thái
         isProcessing = false
-        if statusLabel then
-            statusLabel.Text = statusLabel.Text .. " | ✅ Đã dừng - hết pet để lấy"
+        if mainBtn then
+            mainBtn.Text = "▶ BẮT ĐẦU LẤY PET & GỬI"
+            mainBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
         end
     end)
 end
 
 -- ===== UI KEY =====
 local function createKeyUI()
+    local parent = getGUIParent()
+    if not parent then
+        warn("Không tìm thấy GUI parent!")
+        return
+    end
+    
+    -- Xóa GUI cũ nếu có
+    local oldGUI = parent:FindFirstChild("VMhubKeyGUI")
+    if oldGUI then oldGUI:Destroy() end
+    local oldMain = parent:FindFirstChild("VMhubMainGUI")
+    if oldMain then oldMain:Destroy() end
+    
     local gui = Instance.new("ScreenGui")
     gui.Name = "VMhubKeyGUI"
     gui.ResetOnSpawn = false
-    gui.Parent = CoreGui
-
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.Parent = parent
+    
+    -- Background mờ
+    local bg = Instance.new("Frame")
+    bg.Name = "Background"
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    bg.BackgroundTransparency = 0.6
+    bg.BorderSizePixel = 0
+    bg.Parent = gui
+    bg.ZIndex = 0
+    
+    -- Main Frame
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 400, 0, 250)
-    mainFrame.Position = UDim2.new(0.5, -200, 0.5, -125)
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 400, 0, 280)
+    mainFrame.Position = UDim2.new(0.5, -200, 0.5, -140)
     mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
     mainFrame.BorderSizePixel = 0
+    mainFrame.BackgroundTransparency = 0
     mainFrame.Parent = gui
+    mainFrame.ZIndex = 1
 
     local uicorner = Instance.new("UICorner")
     uicorner.CornerRadius = UDim.new(0, 12)
@@ -148,18 +198,24 @@ local function createKeyUI()
     stroke.Thickness = 2
     stroke.Parent = mainFrame
 
-    local bg = Instance.new("Frame")
-    bg.Size = UDim2.new(1, 0, 1, 0)
-    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    bg.BackgroundTransparency = 0.5
-    bg.Parent = gui
-    bg.ZIndex = 0
+    -- Icon
+    local iconLabel = Instance.new("TextLabel")
+    iconLabel.Size = UDim2.new(0, 50, 0, 50)
+    iconLabel.Position = UDim2.new(0.5, -25, 0, 15)
+    iconLabel.BackgroundTransparency = 1
+    iconLabel.Text = "⚡"
+    iconLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+    iconLabel.TextSize = 40
+    iconLabel.Font = Enum.Font.GothamBold
+    iconLabel.TextXAlignment = Enum.TextXAlignment.Center
+    iconLabel.Parent = mainFrame
 
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -40, 0, 50)
-    title.Position = UDim2.new(0, 20, 0, 20)
+    title.Name = "Title"
+    title.Size = UDim2.new(1, -40, 0, 35)
+    title.Position = UDim2.new(0, 20, 0, 65)
     title.BackgroundTransparency = 1
-    title.Text = "⚡ VMhub Key System"
+    title.Text = "VMhub Key System"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.TextSize = 22
     title.Font = Enum.Font.GothamBold
@@ -167,8 +223,9 @@ local function createKeyUI()
     title.Parent = mainFrame
 
     local subTitle = Instance.new("TextLabel")
-    subTitle.Size = UDim2.new(1, -40, 0, 30)
-    subTitle.Position = UDim2.new(0, 20, 0, 65)
+    subTitle.Name = "SubTitle"
+    subTitle.Size = UDim2.new(1, -40, 0, 25)
+    subTitle.Position = UDim2.new(0, 20, 0, 98)
     subTitle.BackgroundTransparency = 1
     subTitle.Text = "Nhập key để kích hoạt script"
     subTitle.TextColor3 = Color3.fromRGB(180, 180, 190)
@@ -177,9 +234,11 @@ local function createKeyUI()
     subTitle.TextXAlignment = Enum.TextXAlignment.Center
     subTitle.Parent = mainFrame
 
+    -- Ô nhập key
     local textBox = Instance.new("TextBox")
+    textBox.Name = "KeyBox"
     textBox.Size = UDim2.new(1, -80, 0, 45)
-    textBox.Position = UDim2.new(0, 40, 0, 110)
+    textBox.Position = UDim2.new(0, 40, 0, 135)
     textBox.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
     textBox.BorderSizePixel = 0
     textBox.PlaceholderText = "Nhập key tại đây..."
@@ -189,8 +248,8 @@ local function createKeyUI()
     textBox.TextSize = 18
     textBox.Font = Enum.Font.Gotham
     textBox.TextXAlignment = Enum.TextXAlignment.Center
-    textBox.Parent = mainFrame
     textBox.ClearTextOnFocus = false
+    textBox.Parent = mainFrame
 
     local boxCorner = Instance.new("UICorner")
     boxCorner.CornerRadius = UDim.new(0, 8)
@@ -202,26 +261,31 @@ local function createKeyUI()
     boxStroke.Transparency = 0.6
     boxStroke.Parent = textBox
 
+    -- Label thông báo lỗi
     local errorLabel = Instance.new("TextLabel")
-    errorLabel.Size = UDim2.new(1, -40, 0, 20)
-    errorLabel.Position = UDim2.new(0, 20, 0, 158)
+    errorLabel.Name = "ErrorLabel"
+    errorLabel.Size = UDim2.new(1, -40, 0, 25)
+    errorLabel.Position = UDim2.new(0, 20, 0, 185)
     errorLabel.BackgroundTransparency = 1
     errorLabel.Text = ""
     errorLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
-    errorLabel.TextSize = 13
+    errorLabel.TextSize = 14
     errorLabel.Font = Enum.Font.Gotham
     errorLabel.TextXAlignment = Enum.TextXAlignment.Center
     errorLabel.Parent = mainFrame
 
+    -- Nút xác nhận
     local confirmButton = Instance.new("TextButton")
-    confirmButton.Size = UDim2.new(1, -160, 0, 45)
-    confirmButton.Position = UDim2.new(0, 80, 0, 185)
+    confirmButton.Name = "ConfirmBtn"
+    confirmButton.Size = UDim2.new(1, -160, 0, 50)
+    confirmButton.Position = UDim2.new(0, 80, 0, 215)
     confirmButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
     confirmButton.BorderSizePixel = 0
     confirmButton.Text = "XÁC NHẬN"
     confirmButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    confirmButton.TextSize = 16
+    confirmButton.TextSize = 18
     confirmButton.Font = Enum.Font.GothamBold
+    confirmButton.TextXAlignment = Enum.TextXAlignment.Center
     confirmButton.Parent = mainFrame
 
     local btnCorner = Instance.new("UICorner")
@@ -242,19 +306,29 @@ local function createKeyUI()
             KEY_ENTERED = true
             errorLabel.TextColor3 = Color3.fromRGB(80, 255, 80)
             errorLabel.Text = "✅ Key hợp lệ! Đang khởi động..."
+            confirmButton.Text = "✓"
+            confirmButton.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
             
-            task.wait(0.5)
+            task.wait(0.8)
             gui:Destroy()
-            createMainUI()
+            
+            -- Tạo UI chính
+            local success, err = pcall(createMainUI)
+            if not success then
+                warn("Lỗi tạo main UI: " .. tostring(err))
+            end
         else
             errorLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
             errorLabel.Text = "❌ Key không đúng! Vui lòng thử lại."
             
+            -- Rung
             for i = 1, 3 do
-                textBox.Position = UDim2.new(0, 40 + (i % 2 == 0 and 5 or -5), 0, 110)
+                mainFrame.Position = UDim2.new(0.5, -200 + (i % 2 == 0 and 6 or -6), 0.5, -140)
                 task.wait(0.05)
             end
-            textBox.Position = UDim2.new(0, 40, 0, 110)
+            mainFrame.Position = UDim2.new(0.5, -200, 0.5, -140)
+            textBox.Text = ""
+            textBox:CaptureFocus()
         end
     end)
 
@@ -264,34 +338,47 @@ local function createKeyUI()
         end
     end)
 
+    -- Animation fade in
     mainFrame.BackgroundTransparency = 1
+    bg.BackgroundTransparency = 1
     for i = 1, 10 do
         mainFrame.BackgroundTransparency = 1 - (i / 10)
-        bg.BackgroundTransparency = 0.5 + (1 - (i / 10)) * 0.5
+        bg.BackgroundTransparency = 0.6 + (1 - (i / 10)) * 0.4
         task.wait(0.03)
     end
     mainFrame.BackgroundTransparency = 0
-    bg.BackgroundTransparency = 0.5
+    bg.BackgroundTransparency = 0.6
 
-    task.wait(0.1)
-    textBox:CaptureFocus()
+    task.wait(0.2)
+    pcall(function()
+        textBox:CaptureFocus()
+    end)
 end
 
 -- ===== UI CHÍNH - CHỈ 1 NÚT =====
 local function createMainUI()
+    local parent = getGUIParent()
+    if not parent then
+        warn("Không tìm thấy GUI parent!")
+        return
+    end
+    
     local gui = Instance.new("ScreenGui")
     gui.Name = "VMhubMainGUI"
     gui.ResetOnSpawn = false
-    gui.Parent = CoreGui
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.Parent = parent
 
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 350, 0, 250)
-    mainFrame.Position = UDim2.new(0.5, -175, 0.5, -125)
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 350, 0, 260)
+    mainFrame.Position = UDim2.new(0.5, -175, 0.5, -130)
     mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
     mainFrame.BorderSizePixel = 0
     mainFrame.Draggable = true
     mainFrame.Active = true
     mainFrame.Parent = gui
+    mainFrame.ZIndex = 1
 
     local uicorner = Instance.new("UICorner")
     uicorner.CornerRadius = UDim.new(0, 12)
@@ -302,8 +389,9 @@ local function createMainUI()
     stroke.Thickness = 2
     stroke.Parent = mainFrame
 
-    -- Title
+    -- Title Bar
     local titleBar = Instance.new("Frame")
+    titleBar.Name = "TitleBar"
     titleBar.Size = UDim2.new(1, 0, 0, 45)
     titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
     titleBar.BorderSizePixel = 0
@@ -324,8 +412,8 @@ local function createMainUI()
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
     titleLabel.Parent = titleBar
 
-    -- Nút đóng
     local closeBtn = Instance.new("TextButton")
+    closeBtn.Name = "CloseBtn"
     closeBtn.Size = UDim2.new(0, 30, 0, 30)
     closeBtn.Position = UDim2.new(1, -38, 0, 7)
     closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
@@ -342,32 +430,35 @@ local function createMainUI()
 
     closeBtn.MouseButton1Click:Connect(function()
         isProcessing = false
-        if processingLoop then task.cancel(processingLoop) end
+        if processingLoop then task.cancel(processingLoop) processingLoop = nil end
         gui:Destroy()
     end)
 
     -- Status label
     local statusLabel = Instance.new("TextLabel")
-    statusLabel.Size = UDim2.new(1, -30, 0, 40)
+    statusLabel.Name = "StatusLabel"
+    statusLabel.Size = UDim2.new(1, -30, 0, 45)
     statusLabel.Position = UDim2.new(0, 15, 0, 55)
     statusLabel.BackgroundTransparency = 1
-    statusLabel.Text = "👤 Target: " .. CONFIG.TARGET_PLAYER .. " | Sẵn sàng"
+    statusLabel.Text = "👤 Target: " .. CONFIG.TARGET_PLAYER .. "\nSẵn sàng! Bấm nút để bắt đầu."
     statusLabel.TextColor3 = Color3.fromRGB(180, 180, 190)
     statusLabel.TextSize = 13
     statusLabel.Font = Enum.Font.Gotham
     statusLabel.TextXAlignment = Enum.TextXAlignment.Center
     statusLabel.TextWrapped = true
+    statusLabel.RichText = true
     statusLabel.Parent = mainFrame
 
     -- ===== 1 NÚT DUY NHẤT =====
     local mainBtn = Instance.new("TextButton")
-    mainBtn.Size = UDim2.new(1, -60, 0, 60)
+    mainBtn.Name = "MainBtn"
+    mainBtn.Size = UDim2.new(1, -60, 0, 65)
     mainBtn.Position = UDim2.new(0, 30, 0, 110)
     mainBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
     mainBtn.BorderSizePixel = 0
-    mainBtn.Text = "▶ BẮT ĐẦU LẤY PET & GỬI"
+    mainBtn.Text = "▶ BẮT ĐẦU"
     mainBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    mainBtn.TextSize = 16
+    mainBtn.TextSize = 18
     mainBtn.Font = Enum.Font.GothamBold
     mainBtn.Parent = mainFrame
 
@@ -376,7 +467,9 @@ local function createMainUI()
     btnCorner.Parent = mainBtn
 
     mainBtn.MouseEnter:Connect(function()
-        TweenService:Create(mainBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(70, 210, 100)}):Play()
+        if not isProcessing then
+            TweenService:Create(mainBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(70, 210, 100)}):Play()
+        end
     end)
     mainBtn.MouseLeave:Connect(function()
         if not isProcessing then
@@ -386,14 +479,15 @@ local function createMainUI()
 
     mainBtn.MouseButton1Click:Connect(function()
         if isProcessing then
-            -- Đang chạy → bấm để dừng
+            -- Đang chạy → dừng
             isProcessing = false
-            mainBtn.Text = "▶ BẮT ĐẦU LẤY PET & GỬI"
+            if processingLoop then task.cancel(processingLoop) processingLoop = nil end
+            mainBtn.Text = "▶ BẮT ĐẦU"
             mainBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 80)
             statusLabel.Text = "⏹ Đã dừng | Target: " .. CONFIG.TARGET_PLAYER
         else
-            -- Bắt đầu chạy
-            mainBtn.Text = "⏹ ĐANG CHẠY... (BẤM ĐỂ DỪNG)"
+            -- Bắt đầu
+            mainBtn.Text = "⏹ DỪNG"
             mainBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
             statusLabel.Text = "🔄 Đang lấy pet và gửi cho " .. CONFIG.TARGET_PLAYER .. "..."
             startProcessing(statusLabel, mainBtn)
@@ -436,4 +530,7 @@ local function createMainUI()
 end
 
 -- ===== KHỞI ĐỘNG =====
-createKeyUI()
+local success, err = pcall(createKeyUI)
+if not success then
+    warn("Lỗi khởi động script: " .. tostring(err))
+end
