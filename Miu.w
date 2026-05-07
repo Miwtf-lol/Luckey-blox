@@ -81,7 +81,7 @@ Mini.Draggable = true
 Instance.new("UICorner", Mini).CornerRadius = UDim.new(1,0)
 
 -- DÁN ẢNH Ở ĐÂY
-Mini.Image = "rbxassetid://7072719338"
+Mini.Image = "rbxassetid://135283977825181"
 
 -- MINIMIZE FUNCTION
 Minimize.MouseButton1Click:Connect(function()
