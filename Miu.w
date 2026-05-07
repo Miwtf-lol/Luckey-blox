@@ -382,7 +382,7 @@ end)
 ------------------------------------------------
 
 task.spawn(function()
-	while task.wait(2) do
+	while task.wait(0.5) do
 		if AutoX2Buff then
 			local Character = LocalPlayer.Character
 			if Character then
