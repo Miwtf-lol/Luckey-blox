@@ -6,7 +6,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -28,24 +27,16 @@ ScreenGui.Name = "MIU_HUB"
 ScreenGui.Parent = game.CoreGui
 
 ------------------------------------------------
--- LOADING GUI
+-- LOADING GUI (Chỉ bảng hồng, ko có nền đen)
 ------------------------------------------------
 
-local LoadingFrame = Instance.new("Frame")
-LoadingFrame.Parent = ScreenGui
-LoadingFrame.Size = UDim2.new(1,0,1,0)
-LoadingFrame.Position = UDim2.new(0,0,0,0)
-LoadingFrame.BackgroundColor3 = Color3.fromRGB(10,10,10)
-LoadingFrame.BackgroundTransparency = 0
-LoadingFrame.ZIndex = 100
-
 local LoadingBG = Instance.new("Frame")
-LoadingBG.Parent = LoadingFrame
+LoadingBG.Parent = ScreenGui
 LoadingBG.Size = UDim2.new(0,350,0,200)
 LoadingBG.Position = UDim2.new(0.5,-175,0.5,-100)
 LoadingBG.BackgroundColor3 = Color3.fromRGB(255,105,180)
-LoadingBG.BackgroundTransparency = 0
 LoadingBG.BorderSizePixel = 0
+LoadingBG.ZIndex = 100
 
 Instance.new("UICorner", LoadingBG).CornerRadius = UDim.new(0,20)
 
@@ -58,6 +49,7 @@ LoadingTitle.Text = "🔑 MIU HUB"
 LoadingTitle.Font = Enum.Font.GothamBold
 LoadingTitle.TextSize = 28
 LoadingTitle.TextColor3 = Color3.new(1,1,1)
+LoadingTitle.ZIndex = 101
 
 local LoadingSubTitle = Instance.new("TextLabel")
 LoadingSubTitle.Parent = LoadingBG
@@ -68,6 +60,7 @@ LoadingSubTitle.Text = "Loading..."
 LoadingSubTitle.Font = Enum.Font.Gotham
 LoadingSubTitle.TextSize = 16
 LoadingSubTitle.TextColor3 = Color3.fromRGB(255,255,200)
+LoadingSubTitle.ZIndex = 101
 
 -- Thanh loading
 local BarContainer = Instance.new("Frame")
@@ -77,6 +70,7 @@ BarContainer.Position = UDim2.new(0.1,0,0.55,0)
 BarContainer.BackgroundColor3 = Color3.fromRGB(60,30,50)
 BarContainer.BorderSizePixel = 0
 BarContainer.ClipsDescendants = true
+BarContainer.ZIndex = 101
 
 Instance.new("UICorner", BarContainer).CornerRadius = UDim.new(0,10)
 
@@ -85,6 +79,7 @@ LoadingBar.Parent = BarContainer
 LoadingBar.Size = UDim2.new(0,0,1,0)
 LoadingBar.BackgroundColor3 = Color3.fromRGB(50,220,100)
 LoadingBar.BorderSizePixel = 0
+LoadingBar.ZIndex = 102
 
 Instance.new("UICorner", LoadingBar).CornerRadius = UDim.new(0,10)
 
@@ -98,6 +93,7 @@ PercentLabel.Text = "0%"
 PercentLabel.Font = Enum.Font.GothamBold
 PercentLabel.TextSize = 24
 PercentLabel.TextColor3 = Color3.new(1,1,1)
+PercentLabel.ZIndex = 101
 
 local LoadingStatus = Instance.new("TextLabel")
 LoadingStatus.Parent = LoadingBG
@@ -108,12 +104,12 @@ LoadingStatus.Text = "Initializing..."
 LoadingStatus.Font = Enum.Font.Gotham
 LoadingStatus.TextSize = 13
 LoadingStatus.TextColor3 = Color3.fromRGB(200,200,200)
+LoadingStatus.ZIndex = 101
 
 ------------------------------------------------
 -- LOADING ANIMATION
 ------------------------------------------------
 
--- Danh sách các bước loading
 local loadingSteps = {
 	{Percent = 5,  Status = "Loading script modules..."},
 	{Percent = 10, Status = "Verifying dependencies..."},
@@ -136,14 +132,12 @@ local function RunLoadingAnimation()
 		local targetPercent = step.Percent
 		local startPercent = 0
 		
-		-- Lấy % hiện tại
 		local currentBar = LoadingBar.Size.X.Offset
 		local currentWidth = BarContainer.AbsoluteSize.X
 		if currentWidth > 0 then
 			startPercent = math.floor((currentBar / currentWidth) * 100)
 		end
 		
-		-- Animation mượt từ % hiện tại đến target
 		local stepsToReach = math.max(1, math.floor((targetPercent - startPercent) / 2))
 		for i = 1, stepsToReach do
 			local progress = i / stepsToReach
@@ -157,7 +151,6 @@ local function RunLoadingAnimation()
 			task.wait(0.03)
 		end
 		
-		-- Snap chính xác đến target
 		LoadingBar.Size = UDim2.new(0, (targetPercent / 100) * BarContainer.AbsoluteSize.X, 1, 0)
 		PercentLabel.Text = targetPercent .. "%"
 		LoadingStatus.Text = step.Status
@@ -171,14 +164,14 @@ local function RunLoadingAnimation()
 end
 
 ------------------------------------------------
--- CHẠY LOADING SAU ĐÓ ẨN
+-- CHẠY LOADING SAU ĐÓ ẨN BẢNG HỒNG
 ------------------------------------------------
 
 task.spawn(function()
 	RunLoadingAnimation()
 	
-	-- Ẩn loading với hiệu ứng
-	local fadeOut = TweenService:Create(LoadingFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
+	-- Fade out bảng hồng
+	local fadeOut = TweenService:Create(LoadingBG, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
 	fadeOut:Play()
 	
 	for _, child in ipairs(LoadingBG:GetChildren()) do
@@ -189,7 +182,7 @@ task.spawn(function()
 	end
 	
 	task.wait(0.5)
-	LoadingFrame:Destroy()
+	LoadingBG:Destroy()
 end)
 
 ------------------------------------------------
@@ -216,7 +209,7 @@ KeyTitle.Font = Enum.Font.GothamBold
 KeyTitle.TextSize = 22
 KeyTitle.TextColor3 = Color3.new(1,1,1)
 
--- Nút GETKEY (sẽ tự động copy link + auto-fill key + auto-save)
+-- Nút GETKEY
 local GetKeyButton = Instance.new("TextButton")
 GetKeyButton.Parent = KeyFrame
 GetKeyButton.Size = UDim2.new(0.8,0,0,35)
@@ -229,7 +222,6 @@ GetKeyButton.TextColor3 = Color3.new(1,1,1)
 
 Instance.new("UICorner", GetKeyButton).CornerRadius = UDim.new(0,14)
 
--- Label trạng thái
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Parent = KeyFrame
 StatusLabel.Size = UDim2.new(0.9,0,0,20)
@@ -264,7 +256,6 @@ CheckButton.TextColor3 = Color3.new(1,1,1)
 
 Instance.new("UICorner", CheckButton).CornerRadius = UDim.new(0,14)
 
--- Label thời gian hết hạn
 local ExpiryLabel = Instance.new("TextLabel")
 ExpiryLabel.Parent = KeyFrame
 ExpiryLabel.Size = UDim2.new(1,0,0,18)
@@ -300,7 +291,6 @@ Title.Font = Enum.Font.GothamBold
 Title.TextSize = 24
 Title.TextColor3 = Color3.new(1,1,1)
 
--- MINIMIZE BUTTON
 local Minimize = Instance.new("TextButton")
 Minimize.Parent = Main
 Minimize.Size = UDim2.new(0,30,0,30)
@@ -313,7 +303,6 @@ Minimize.TextSize = 22
 
 Instance.new("UICorner", Minimize).CornerRadius = UDim.new(1,0)
 
--- TOGGLE
 local Toggle = Instance.new("TextButton")
 Toggle.Parent = Main
 Toggle.Size = UDim2.new(0.8,0,0,45)
@@ -326,7 +315,6 @@ Toggle.TextSize = 20
 
 Instance.new("UICorner", Toggle).CornerRadius = UDim.new(0,14)
 
--- MINI ICON
 local Mini = Instance.new("ImageButton")
 Mini.Parent = ScreenGui
 Mini.Size = UDim2.new(0,55,0,55)
@@ -338,14 +326,12 @@ Mini.Draggable = true
 
 Instance.new("UICorner", Mini).CornerRadius = UDim.new(1,0)
 
--- ẢNH ICON
 Mini.Image = "rbxassetid://135283977825181"
 
 ------------------------------------------------
 -- KEY MANAGEMENT FUNCTIONS
 ------------------------------------------------
 
--- Kiểm tra key còn hạn không
 local function IsKeyValid(savedData)
 	if not savedData then return false end
 	
@@ -357,11 +343,9 @@ local function IsKeyValid(savedData)
 	
 	if elapsed >= expirySeconds then return false end
 	
-	-- Key đúng và còn hạn
 	return decoded.Key == CorrectKey, decoded
 end
 
--- Cập nhật hiển thị thời gian còn lại
 local function UpdateExpiryDisplay(decoded)
 	if decoded and decoded.Timestamp then
 		local elapsed = os.time() - decoded.Timestamp
@@ -378,7 +362,6 @@ end
 -- CHECK SAVED KEY ON START
 ------------------------------------------------
 
--- Tìm key đã lưu
 local savedValue
 local savedObj = game.CoreGui:FindFirstChild(KeyStorage)
 if savedObj then
@@ -388,12 +371,10 @@ end
 if savedValue then
 	local valid, decoded = IsKeyValid(savedValue)
 	if valid then
-		-- Key còn hạn, bỏ qua key GUI
 		KeyFrame.Visible = false
 		Main.Visible = true
 		UpdateExpiryDisplay(decoded)
 		
-		-- Tự động cập nhật thời gian mỗi phút
 		task.spawn(function()
 			while Main.Visible do
 				task.wait(60)
@@ -407,7 +388,6 @@ if savedValue then
 			end
 		end)
 	else
-		-- Key hết hạn hoặc sai
 		ExpiryLabel.Text = "❌ Key expired or invalid - Get a new one!"
 		if decoded then
 			UpdateExpiryDisplay(decoded)
@@ -416,11 +396,10 @@ if savedValue then
 end
 
 ------------------------------------------------
--- GETKEY BUTTON - Copy link + auto-fill key + auto-save
+-- GETKEY BUTTON
 ------------------------------------------------
 
 GetKeyButton.MouseButton1Click:Connect(function()
-	-- Copy link vào clipboard
 	local success = false
 	if pcall(function()
 		setclipboard(KeyLink)
@@ -429,17 +408,14 @@ GetKeyButton.MouseButton1Click:Connect(function()
 	end
 	
 	if success then
-		-- TỰ ĐỘNG ĐIỀN KEY VÀO Ô
 		KeyBox.Text = CorrectKey
 		
-		-- TỰ ĐỘNG LƯU KEY + TIMESTAMP
 		local data = {
 			Key = CorrectKey,
 			Timestamp = os.time()
 		}
 		local jsonData = HttpService:JSONEncode(data)
 		
-		-- Xóa key cũ nếu có
 		local old = game.CoreGui:FindFirstChild(KeyStorage)
 		if old then old:Destroy() end
 		
@@ -448,7 +424,6 @@ GetKeyButton.MouseButton1Click:Connect(function()
 		saved.Value = jsonData
 		saved.Parent = game.CoreGui
 		
-		-- Copy data ra clipboard phòng khi
 		pcall(function()
 			setclipboard(KeyLink .. " | Key: " .. CorrectKey)
 		end)
@@ -471,14 +446,12 @@ CheckButton.MouseButton1Click:Connect(function()
 	local inputKey = KeyBox.Text
 	
 	if inputKey == CorrectKey then
-		-- Key đúng -> lưu với timestamp
 		local data = {
 			Key = inputKey,
 			Timestamp = os.time()
 		}
 		local jsonData = HttpService:JSONEncode(data)
 		
-		-- Xóa key cũ nếu có
 		local old = game.CoreGui:FindFirstChild(KeyStorage)
 		if old then old:Destroy() end
 		
@@ -487,7 +460,6 @@ CheckButton.MouseButton1Click:Connect(function()
 		saved.Value = jsonData
 		saved.Parent = game.CoreGui
 		
-		-- Copy vào clipboard nếu được
 		pcall(function()
 			setclipboard(jsonData)
 		end)
@@ -496,7 +468,6 @@ CheckButton.MouseButton1Click:Connect(function()
 		Main.Visible = true
 		UpdateExpiryDisplay(data)
 		
-		-- Tự động cập nhật thời gian mỗi phút
 		task.spawn(function()
 			while Main.Visible do
 				task.wait(60)
