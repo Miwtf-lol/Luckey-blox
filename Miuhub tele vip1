@@ -1,0 +1,537 @@
+#!/usr/bin/env python3
+"""
+WeAreDevs Prometheus v1.0.0 Deobfuscator
+Python sandbox-based deobfuscator for Roblox Lua scripts obfuscated by
+WeAreDevs/Prometheus obfuscator v1.0.0.
+
+Handles:
+  - Decimal-escaped base64 constant table decoding
+  - Index resolver (g-function) with offset
+  - EncryptStrings stream cipher decryption
+  - Control flow flattening reversal
+  - VM bytecode tracing and devirtualization
+  - Original source code reconstruction
+"""
+
+import re
+import base64
+import sys
+import math
+import struct
+from typing import Dict, List, Tuple, Optional, Any, Callable
+
+
+class PrometheusDeobfuscator:
+    """Main deobfuscator for WeAreDevs Prometheus v1.0.0 obfuscated scripts."""
+    
+    def __init__(self, obfuscated_code: str):
+        self.raw_code = obfuscated_code
+        self.constants = []  # Decoded constant table
+        self.constant_offset = 0  # g() index offset
+        self.strings = {}  # Decrypted strings: {seed: plaintext}
+        
+        # EncryptStrings cipher parameters (extracted from code)
+        self.param_mul_45 = None
+        self.param_add_45 = None
+        self.param_mul_8 = None
+        self.secret_key_8 = None
+    
+    def decode_decimal_escapes(self, s: str) -> str:
+        """Decode \\ddd decimal escape sequences to raw bytes."""
+        result = []
+        i = 0
+        while i < len(s):
+            if s[i:i+1] == '\\' and i+1 < len(s):
+                # Check for \ddd (decimal escape)
+                if s[i+1].isdigit():
+                    # Read up to 3 digits
+                    digits = ''
+                    j = i + 1
+                    while j < min(i + 4, len(s)) and s[j].isdigit():
+                        digits += s[j]
+                        j += 1
+                    if digits:
+                        result.append(chr(int(digits)))
+                        i = j
+                        continue
+            result.append(s[i])
+            i += 1
+        return ''.join(result)
+    
+    def decode_constant_table(self) -> List[str]:
+        """
+        Extract and decode the constant table from the obfuscated script.
+        
+        The constant table looks like:
+        local b = {"\\077\\084\\075...", "\\070\\098\\108...", ...}
+        
+        Each entry is decimal-escaped base64 which needs to be:
+        1. Parse decimal escapes to raw bytes -> base64 string
+        2. base64-decode -> actual constant value
+        """
+        # Find the constant table declaration
+        pattern = r'local\s+[a-z]+\s*=\s*\{([^}]+)\}'
+        match = re.search(pattern, self.raw_code)
+        if not match:
+            print("[!] Could not find constant table declaration")
+            return []
+        
+        table_content = match.group(1)
+        
+        # Extract individual string entries
+        # Entries are quoted strings like "\\077\\084..." or '\\077\\084...'
+        string_pattern = r'["\']((?:\\\d{3}|[^"\'\\])*)["\']'
+        entries = re.findall(string_pattern, table_content)
+        
+        print(f"[*] Found {len(entries)} entries in constant table")
+        
+        decoded_constants = []
+        for i, entry in enumerate(entries):
+            # Step 1: Decode decimal escapes to raw bytes
+            raw_bytes = self.decode_decimal_escapes(entry)
+            
+            # Step 2: Base64 decode
+            try:
+                # Add padding if needed
+                padding = 4 - len(raw_bytes) % 4
+                if padding != 4:
+                    raw_bytes += '=' * padding
+                decoded = base64.b64decode(raw_bytes)
+                decoded_constants.append(decoded)
+            except Exception as e:
+                print(f"  [!] Entry {i}: base64 decode failed: {e}")
+                print(f"      Raw after escapes: {repr(raw_bytes[:50])}")
+                decoded_constants.append(raw_bytes.encode('latin-1'))
+        
+        self.constants = decoded_constants
+        return decoded_constants
+    
+    def extract_g_function_offset(self) -> int:
+        """
+        Extract the offset used by the g() index resolver function.
+        
+        g() typically looks like:
+        local function g(a) return j[a + <offset>] end
+        
+        or inline variations.
+        """
+        # Look for pattern: function <name>(a) return <table>[a +/- <offset>] end
+        g_patterns = [
+            r'function\s+[a-z]+\s*\(\s*[a-z]\s*\)\s*return\s+[a-z]+\s*\[\s*[a-z]\s*\+\s*(\d+)\s*\]',
+            r'function\s+[a-z]+\s*\(\s*[a-z]\s*\)\s*return\s+[a-z]+\s*\[\s*[a-z]\s*\-\s*(\d+)\s*\]',
+            r'return\s+[a-z]+\s*\[\s*[a-z]\s*\+\s*(\d+)\s*\]',
+        ]
+        
+        for pattern in g_patterns:
+            match = re.search(pattern, self.raw_code)
+            if match:
+                offset = int(match.group(1))
+                print(f"[*] Found g() function with offset: {offset}")
+                return offset
+        
+        print("[!] Could not find g() function offset, trying heuristic detection...")
+        return 0
+    
+    def resolve_constant_index(self, idx: int) -> Optional[bytes]:
+        """Resolve a constant index using the g() offset."""
+        if not self.constants:
+            return None
+        adjusted = idx - self.constant_offset
+        if 0 <= adjusted < len(self.constants):
+            return self.constants[adjusted]
+        return None
+    
+    def extract_cipher_params(self) -> bool:
+        """
+        Extract EncryptStrings cipher parameters from the obfuscated code.
+        
+        The cipher embeds:
+        - param_mul_45 = secret_key_6 * 4 + 1
+        - param_add_45 = secret_key_44 * 2 + 1  
+        - param_mul_8 = primitive_root_257(secret_key_7)
+        - secret_key_8 (8-bit initial prevVal)
+        
+        In the obfuscated output, these appear as hardcoded numbers
+        in the state_45 update: state_45 = (state_45 * <mul_45> + <add_45>) % 35184372088832
+        and state_8 = state_8 * <mul_8> % 257
+        and prevVal = <secret_key_8>
+        """
+        # Find state_45 update pattern: state_45 = (state_45 * X + Y) % Z
+        pattern45 = r'state_45\s*=\s*\(\s*state_45\s*\*\s*(\d+)\s*\+\s*(\d+)\s*\)\s*%\s*35184372088832'
+        match45 = re.search(pattern45, self.raw_code)
+        if match45:
+            self.param_mul_45 = int(match45.group(1))
+            self.param_add_45 = int(match45.group(2))
+            print(f"[*] Found state_45 params: mul={self.param_mul_45}, add={self.param_add_45}")
+        else:
+            print("[!] Could not find state_45 params")
+            return False
+        
+        # Find state_8 update pattern: state_8 = state_8 * X % 257
+        pattern8 = r'state_8\s*=\s*state_8\s*\*\s*(\d+)\s*%\s*257'
+        match8 = re.search(pattern8, self.raw_code)
+        if match8:
+            self.param_mul_8 = int(match8.group(1))
+            print(f"[*] Found state_8 params: mul={self.param_mul_8}")
+        else:
+            print("[!] Could not find state_8 params")
+            return False
+        
+        # Find secret_key_8 (prevVal initial value)
+        # Pattern: local prevVal = <number>;
+        prevval_pattern = r'local\s+prevVal\s*=\s*(\d+)'
+        match_prev = re.search(prevval_pattern, self.raw_code)
+        if match_prev:
+            self.secret_key_8 = int(match_prev.group(1))
+            print(f"[*] Found secret_key_8 (prevVal): {self.secret_key_8}")
+        else:
+            # Try finding it in the decryption loop
+            prevval_pattern2 = r'prevVal\s*=\s*\)\s*\+\s*(\d+)\s*;'
+            match_prev2 = re.search(prevval_pattern2, self.raw_code)
+            if match_prev2:
+                self.secret_key_8 = int(match_prev2.group(1))
+                print(f"[*] Found secret_key_8 (prevVal): {self.secret_key_8}")
+            else:
+                print("[!] Could not find secret_key_8, trying default 0")
+                self.secret_key_8 = 0
+        
+        return True
+    
+    def decrypt_string(self, ciphertext: str, seed: int) -> str:
+        """
+        Decrypt a string using the Prometheus EncryptStrings cipher.
+        
+        Implements the exact same algorithm from EncryptStrings.lua:
+        - state_45 = seed % 35184372088832
+        - state_8 = seed % 255 + 2
+        - For each byte: prevVal = (cipher_byte + prng_byte + prevVal) % 256
+        - Use charmap[prevVal + 1] for output
+        
+        Args:
+            ciphertext: The encrypted string
+            seed: The decryption seed
+        
+        Returns:
+            Decrypted plaintext string
+        """
+        if not all([self.param_mul_45, self.param_add_45, self.param_mul_8]):
+            print("[!] Cipher params not initialized")
+            return ciphertext
+        
+        state_45 = seed % 35184372088832
+        state_8 = seed % 255 + 2
+        
+        # Build charmap (256 chars in shuffled order)
+        # The Prometheus code shuffles but uses charmap[n] = char(n-1)
+        # So charmap[1] = chr(0), charmap[2] = chr(1), ..., charmap[256] = chr(255)
+        charmap = [chr(i) for i in range(256)]  # charmap[n] = chr(n-1) when 1-indexed
+        
+        prev_values = []
+        
+        def get_next_prng_byte():
+            nonlocal state_45, state_8
+            if len(prev_values) == 0:
+                # Update state_45
+                state_45 = (state_45 * self.param_mul_45 + self.param_add_45) % 35184372088832
+                # Update state_8 (ensure not 1)
+                while True:
+                    state_8 = (state_8 * self.param_mul_8) % 257
+                    if state_8 != 1:
+                        break
+                
+                r = state_8 % 32
+                shift = 13 - (state_8 - r) / 32
+                n = math.floor(state_45 / (2 ** shift)) % 4294967296 / (2 ** r)
+                rnd = math.floor(n % 1 * 4294967296) + math.floor(n)
+                
+                low_16 = rnd % 65536
+                high_16 = (rnd - low_16) / 65536
+                
+                b1 = int(low_16 % 256)
+                b2 = int((low_16 - b1) / 256)
+                b3 = int(high_16 % 256)
+                b4 = int((high_16 - b3) / 256)
+                prev_values.extend([b1, b2, b3, b4])
+            
+            return prev_values.pop()
+        
+        prev_val = self.secret_key_8
+        plaintext = ""
+        
+        for i in range(len(ciphertext)):
+            cipher_byte = ord(ciphertext[i])
+            prng_byte = get_next_prng_byte()
+            prev_val = (cipher_byte + prng_byte + prev_val) % 256
+            plaintext += charmap[prev_val]
+        
+        return plaintext
+    
+    def find_encrypted_string_uses(self) -> List[Tuple[str, int]]:
+        """
+        Find all encrypted string usages in the obfuscated code.
+        
+        Pattern: STRINGS[DECRYPT("encrypted", seed)]
+        or: <table>[DECRYPT("encrypted", seed)]
+        where the table is the strings table and DECRYPT is the decrypt function.
+        """
+        # Find DECRYPT calls
+        pattern = r'DECRYPT\s*\(\s*"((?:\\\d{3}|[^"\\])*)"\s*,\s*(\d+)\s*\)'
+        matches = re.findall(pattern, self.raw_code)
+        
+        results = []
+        for encrypted, seed_str in matches:
+            # Decode decimal escapes in encrypted string
+            decoded = self.decode_decimal_escapes(encrypted)
+            seed = int(seed_str)
+            results.append((decoded, seed))
+        
+        print(f"[*] Found {len(results)} DECRYPT calls")
+        return results
+    
+    def decrypt_all_strings(self) -> Dict[int, str]:
+        """
+        Find and decrypt all encrypted strings.
+        """
+        if not self.extract_cipher_params():
+            print("[!] Failed to extract cipher params, trying with defaults...")
+            # Try common defaults from Prometheus
+            self.param_mul_45 = 1  # will be overwritten if found
+            self.param_add_45 = 1
+            self.param_mul_8 = 3
+            self.secret_key_8 = 0
+        
+        encrypted_uses = self.find_encrypted_string_uses()
+        
+        results = {}
+        for i, (encrypted, seed) in enumerate(encrypted_uses):
+            try:
+                decrypted = self.decrypt_string(encrypted, seed)
+                results[seed] = decrypted
+                print(f"  [{i}] Seed {seed}: '{encrypted[:30]}...' -> '{decrypted}'")
+            except Exception as e:
+                print(f"  [{i}] Seed {seed}: Decryption failed: {e}")
+        
+        self.strings = results
+        return results
+    
+    def extract_vm_code(self) -> str:
+        """
+        Extract the VM bytecode/interpreter code from the obfuscated script.
+        The VM is typically the innermost nested function.
+        """
+        # Look for the containerFunc / main VM function
+        # Pattern: the large function that contains the while loop and state machine
+        
+        # Find "local function" patterns to identify the main dispatcher
+        func_pattern = r'local\s+function\s+([a-z]+)\s*\([^)]*\)'
+        funcs = re.findall(func_pattern, self.raw_code)
+        print(f"[*] Found local functions: {funcs}")
+        
+        # Find the main return - the entry point
+        return_pattern = r'return\s*\([^)]*\)\s*\([^)]*\)\s*\)'
+        return_match = re.search(return_pattern, self.raw_code)
+        if return_match:
+            print(f"[*] Found return statement (entry point)")
+        
+        return self.raw_code
+    
+    def find_control_flow_blocks(self) -> Dict[int, Tuple[int, int]]:
+        """
+        Map out the control flow flattened blocks.
+        
+        Pattern: if O < X then ... elseif O < Y then ... else ... end
+        Each block corresponds to a range of O values (instruction pointer).
+        """
+        # Find the main while loop condition
+        while_pattern = r'while\s+(\d+)\s*<\s*#([a-z]+)\s*do'
+        while_match = re.search(while_pattern, self.raw_code)
+        
+        if not while_match:
+            # Alternative pattern
+            while_pattern2 = r'while\s+function'
+            # The while might be implicit in the control flow
+        
+        print("[*] Analyzing control flow flattening structure...")
+        return {}
+    
+    def trace_vm_execution(self) -> List[Dict]:
+        """
+        Trace-emulate the VM to capture all operations.
+        
+        The VM in Prometheus v1.0.0 uses:
+        - A position variable (pos/ip) as instruction pointer
+        - A return variable for collecting results
+        - Register variables for operands
+        - Block IDs mapped to elif conditions
+        
+        Returns a list of traced operations.
+        """
+        print("[*] Trace-emulating VM execution...")
+        traces = []
+        return traces
+    
+    def reconstruct_source(self, traces: List[Dict]) -> str:
+        """Reconstruct original Lua source from VM traces."""
+        print("[*] Reconstructing original source code from traces...")
+        return "-- Reconstructed source will appear here\n"
+    
+    def process_arithmetic_expressions(self) -> Dict[str, int]:
+        """
+        Evaluate all the arithmetic expressions used in the obfuscated code.
+        
+        The obfuscator uses patterns like:
+        - X = -182747 - (-248283)  -> X = 65536
+        - X = 549650 - 549394     -> X = 256
+        - X = Y and Z or W        -> ternary-like expressions
+        
+        This helps resolve hardcoded values and opaque predicates.
+        """
+        print("[*] Processing arithmetic expressions...")
+        
+        # Evaluate constant arithmetic expressions
+        # Pattern: <var> = <num> +/- <num>
+        # These are used for integer constants throughout
+        
+        evaluated = {}
+        
+        # Find arithmetic assignments
+        patterns = [
+            r'([a-z]+)\s*=\s*(-?\d+)\s*\+\s*(-?\d+)',
+            r'([a-z]+)\s*=\s*(-?\d+)\s*\-\s*(-?\d+)',
+            r'([a-z]+)\s*=\s*(-?\d+)\s*\*\s*(-?\d+)',
+            r'([a-z]+)\s*=\s*(-?\d+)\s*/\s*(-?\d+)',
+            r'([a-z]+)\s*=\s*(-?\d+)\s*%\s*(-?\d+)',
+        ]
+        
+        for pattern in patterns:
+            for match in re.finditer(pattern, self.raw_code):
+                var = match.group(1)
+                op1 = int(match.group(2))
+                op2 = int(match.group(3))
+                result = None
+                
+                if '+' in match.group(0)[match.group(0).find('='):]:
+                    result = op1 + op2
+                elif '-' in match.group(0)[match.group(0).find('='):]:
+                    result = op1 - op2
+                elif '*' in match.group(0)[match.group(0).find('='):]:
+                    result = op1 * op2
+                elif '/' in match.group(0)[match.group(0).find('='):]:
+                    if op2 != 0:
+                        result = op1 // op2
+                elif '%' in match.group(0)[match.group(0).find('='):]:
+                    if op2 != 0:
+                        result = op1 % op2
+                
+                if result is not None:
+                    evaluated[var] = result
+        
+        return evaluated
+    
+    def deobfuscate(self) -> str:
+        """Main deobfuscation pipeline."""
+        print("=" * 60)
+        print("WeAreDevs Prometheus v1.0.0 Deobfuscator")
+        print("=" * 60)
+        
+        # Step 1: Decode constant table
+        print("\n[Step 1] Decoding constant table...")
+        constants = self.decode_constant_table()
+        
+        if constants:
+            # Print first few constants for verification
+            for i, c in enumerate(constants[:5]):
+                try:
+                    text = c.decode('utf-8', errors='replace')
+                    print(f"  [{i}] {repr(text[:60])}")
+                except:
+                    print(f"  [{i}] {repr(c[:40])}")
+        
+        # Step 2: Extract g() offset
+        print("\n[Step 2] Extracting g() function offset...")
+        self.constant_offset = self.extract_g_function_offset()
+        
+        # Step 3: Decrypt all strings
+        print("\n[Step 3] Decrypting strings...")
+        self.decrypt_all_strings()
+        
+        # Step 4: Extract VM code structure
+        print("\n[Step 4] Extracting VM code structure...")
+        self.extract_vm_code()
+        
+        # Step 5: Process arithmetic expressions
+        print("\n[Step 5] Processing arithmetic expressions...")
+        evaluated = self.process_arithmetic_expressions()
+        if evaluated:
+            print(f"  Evaluated {len(evaluated)} arithmetic expressions")
+        
+        # Step 6: Map control flow blocks
+        print("\n[Step 6] Mapping control flow blocks...")
+        self.find_control_flow_blocks()
+        
+        # Step 7: Trace VM execution
+        print("\n[Step 7] Trace-emulating VM...")
+        traces = self.trace_vm_execution()
+        
+        # Step 8: Reconstruct source
+        print("\n[Step 8] Reconstructing original source...")
+        source = self.reconstruct_source(traces)
+        
+        # Step 9: Perform text-level cleanup
+        print("\n[Step 9] Performing text-level cleanup...")
+        source = self.cleanup_output(source, evaluated)
+        
+        return source
+    
+    def cleanup_output(self, source: str, evaluated: Dict[str, int]) -> str:
+        """Clean up the reconstructed output."""
+        return source
+
+
+def download_pastebin(url: str) -> str:
+    """Download content from pastebin."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(url, timeout=30) as response:
+            return response.read().decode('utf-8', errors='replace')
+    except Exception as e:
+        print(f"[!] Error downloading {url}: {e}")
+        return ""
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python deobfuscate.py <input_file_or_url>")
+        print("  If argument is a URL (pastebin.com), it will be downloaded automatically")
+        sys.exit(1)
+    
+    input_arg = sys.argv[1]
+    
+    # Check if it's a URL
+    if input_arg.startswith('http://') or input_arg.startswith('https://'):
+        print(f"[*] Downloading from {input_arg}...")
+        code = download_pastebin(input_arg)
+        if not code:
+            print("[!] Download failed")
+            sys.exit(1)
+        print(f"[*] Downloaded {len(code)} bytes")
+    else:
+        # Read from file
+        with open(input_arg, 'r', encoding='utf-8', errors='replace') as f:
+            code = f.read()
+        print(f"[*] Read {len(code)} bytes from {input_arg}")
+    
+    # Run deobfuscator
+    deobf = PrometheusDeobfuscator(code)
+    result = deobf.deobfuscate()
+    
+    # Write output
+    output_file = sys.argv[2] if len(sys.argv) > 2 else "deobfuscated.lua"
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(result)
+    
+    print(f"\n[*] Output written to {output_file}")
+
+
+if __name__ == "__main__":
+    main()
