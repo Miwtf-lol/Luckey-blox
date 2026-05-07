@@ -164,7 +164,7 @@ local function RunLoadingAnimation()
 end
 
 ------------------------------------------------
--- KEY GUI (ẨN)
+-- KEY GUI
 ------------------------------------------------
 
 local KeyFrame = Instance.new("Frame")
@@ -174,7 +174,7 @@ KeyFrame.Position = UDim2.new(0.5,-160,0.3,0)
 KeyFrame.BackgroundColor3 = Color3.fromRGB(255,105,180)
 KeyFrame.Active = true
 KeyFrame.Draggable = true
-KeyFrame.Visible = false
+KeyFrame.Visible = false  -- Ẩn cho tới khi loading xong
 
 Instance.new("UICorner", KeyFrame).CornerRadius = UDim.new(0,18)
 
@@ -337,38 +337,30 @@ local function UpdateExpiryDisplay(decoded)
 end
 
 ------------------------------------------------
--- CHECK SAVED KEY ON START
+-- HÀM HIỆN MAIN GUI (dùng chung)
 ------------------------------------------------
 
-local savedValue
-local savedObj = game.CoreGui:FindFirstChild(KeyStorage)
-if savedObj then
-	savedValue = savedObj.Value
-end
-
-if savedValue then
-	local valid, decoded = IsKeyValid(savedValue)
-	if valid then
-		UpdateExpiryDisplay(decoded)
-		
-		task.spawn(function()
-			while Main.Visible do
-				task.wait(60)
-				local obj = game.CoreGui:FindFirstChild(KeyStorage)
-				if obj then
-					local v, d = IsKeyValid(obj.Value)
-					if v then
-						UpdateExpiryDisplay(d)
-					end
+local function ShowMainGUI(data)
+	KeyFrame.Visible = false
+	Main.Visible = true
+	
+	if data then
+		UpdateExpiryDisplay(data)
+	end
+	
+	-- Auto update expiry mỗi phút
+	task.spawn(function()
+		while Main.Visible do
+			task.wait(60)
+			local obj = game.CoreGui:FindFirstChild(KeyStorage)
+			if obj then
+				local v, d = IsKeyValid(obj.Value)
+				if v then
+					UpdateExpiryDisplay(d)
 				end
 			end
-		end)
-	else
-		ExpiryLabel.Text = "❌ Key expired or invalid - Get a new one!"
-		if decoded then
-			UpdateExpiryDisplay(decoded)
 		end
-	end
+	end)
 end
 
 ------------------------------------------------
@@ -400,14 +392,12 @@ GetKeyButton.MouseButton1Click:Connect(function()
 		saved.Value = jsonData
 		saved.Parent = game.CoreGui
 		
-		pcall(function()
-			setclipboard(KeyLink .. " | Key: " .. CorrectKey)
-		end)
-		
 		StatusLabel.Text = "✅ Link copied! Key auto-filled & saved!"
 		GetKeyButton.Text = "✅ READY!"
-		task.wait(1.5)
-		GetKeyButton.Text = "📋 GET KEY"
+		task.wait(1)
+		
+		-- Tự động chuyển sang Main GUI sau khi GET KEY
+		ShowMainGUI(data)
 	else
 		StatusLabel.Text = "⚠️ Cannot copy (executor limited)"
 		GetKeyButton.Text = KeyLink
@@ -436,26 +426,7 @@ CheckButton.MouseButton1Click:Connect(function()
 		saved.Value = jsonData
 		saved.Parent = game.CoreGui
 		
-		pcall(function()
-			setclipboard(jsonData)
-		end)
-		
-		KeyFrame.Visible = false
-		Main.Visible = true
-		UpdateExpiryDisplay(data)
-		
-		task.spawn(function()
-			while Main.Visible do
-				task.wait(60)
-				local obj = game.CoreGui:FindFirstChild(KeyStorage)
-				if obj then
-					local v, d = IsKeyValid(obj.Value)
-					if v then
-						UpdateExpiryDisplay(d)
-					end
-				end
-			end
-		end)
+		ShowMainGUI(data)
 		
 		StatusLabel.Text = ""
 	else
@@ -522,18 +493,34 @@ task.spawn(function()
 end)
 
 ------------------------------------------------
--- CHẠY LOADING -> ẨN BẢNG HỒNG -> HIỆN GUI CHÍNH NGAY LẬP TỨC
+-- CHẠY LOADING -> ẨN BẢNG HỒNG -> HIỆN KEY GUI
 ------------------------------------------------
 
 task.spawn(function()
 	RunLoadingAnimation()
 	
-	-- Ẩn bảng hồng ngay lập tức (không fade, không chờ)
+	-- Ẩn bảng hồng
 	LoadingBG.Visible = false
 	LoadingBG:Destroy()
 	
-	-- Hiện GUI chính ngay lập tức
-	Main.Visible = true
+	-- Kiểm tra key đã lưu
+	local savedValue
+	local savedObj = game.CoreGui:FindFirstChild(KeyStorage)
+	if savedObj then
+		savedValue = savedObj.Value
+	end
+	
+	if savedValue then
+		local valid, decoded = IsKeyValid(savedValue)
+		if valid then
+			-- Key hợp lệ -> bỏ qua key GUI, hiện thẳng Main
+			ShowMainGUI(decoded)
+			return
+		end
+	end
+	
+	-- Không có key hoặc key hết hạn -> hiện bảng GET KEY
+	KeyFrame.Visible = true
 end)
 
 print("MIU HUB Loaded")
