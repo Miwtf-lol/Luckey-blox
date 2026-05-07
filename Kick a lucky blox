@@ -1,0 +1,16 @@
+local key = "MIUHUB.WTF"
+
+local function getScript()
+    local url = "https://raw.githubusercontent.com/Miwtf-lol/Luckey-blox/refs/heads/main/Miu.w"
+    return game:HttpGet(url)
+end
+
+local function verify()
+    return key == "MIUHUB.WTF"
+end
+
+if verify() then
+    loadstring(getScript())()
+else
+    warn("Unauthorized access")
+end
