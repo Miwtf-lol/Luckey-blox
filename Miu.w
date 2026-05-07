@@ -1,4 +1,4 @@
---// MIU HUB - Auto x2 Buff
+--// MIU HUB - Auto x2 Buff + Key System
 --// Mobile + PC
 
 local Players = game:GetService("Players")
@@ -11,28 +11,80 @@ local LocalPlayer = Players.LocalPlayer
 local BuffRemote =
 ReplicatedStorage.Shared.Packages.Network.rev_TaviMishkal
 
+-- KEY
+local CorrectKey = "MIUHUB.wtf"
+
 -- SETTINGS
 local AutoX2Buff = false
-local Minimized = false
 
 -- GUI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MIU_HUB"
 ScreenGui.Parent = game.CoreGui
 
--- MAIN
+------------------------------------------------
+-- KEY GUI
+------------------------------------------------
+
+local KeyFrame = Instance.new("Frame")
+KeyFrame.Parent = ScreenGui
+KeyFrame.Size = UDim2.new(0,260,0,170)
+KeyFrame.Position = UDim2.new(0.35,0,0.3,0)
+KeyFrame.BackgroundColor3 = Color3.fromRGB(255,105,180)
+KeyFrame.Active = true
+KeyFrame.Draggable = true
+
+Instance.new("UICorner", KeyFrame).CornerRadius = UDim.new(0,18)
+
+local KeyTitle = Instance.new("TextLabel")
+KeyTitle.Parent = KeyFrame
+KeyTitle.Size = UDim2.new(1,0,0,40)
+KeyTitle.BackgroundTransparency = 1
+KeyTitle.Text = "MIU HUB KEY"
+KeyTitle.Font = Enum.Font.GothamBold
+KeyTitle.TextSize = 24
+KeyTitle.TextColor3 = Color3.new(1,1,1)
+
+local KeyBox = Instance.new("TextBox")
+KeyBox.Parent = KeyFrame
+KeyBox.Size = UDim2.new(0.8,0,0,40)
+KeyBox.Position = UDim2.new(0.1,0,0.35,0)
+KeyBox.PlaceholderText = "Enter Key..."
+KeyBox.Text = ""
+KeyBox.TextSize = 18
+KeyBox.BackgroundColor3 = Color3.fromRGB(255,130,200)
+KeyBox.TextColor3 = Color3.new(1,1,1)
+
+Instance.new("UICorner", KeyBox).CornerRadius = UDim.new(0,14)
+
+local CheckButton = Instance.new("TextButton")
+CheckButton.Parent = KeyFrame
+CheckButton.Size = UDim2.new(0.8,0,0,40)
+CheckButton.Position = UDim2.new(0.1,0,0.67,0)
+CheckButton.Text = "CHECK KEY"
+CheckButton.Font = Enum.Font.GothamBold
+CheckButton.TextSize = 20
+CheckButton.BackgroundColor3 = Color3.fromRGB(255,130,200)
+CheckButton.TextColor3 = Color3.new(1,1,1)
+
+Instance.new("UICorner", CheckButton).CornerRadius = UDim.new(0,14)
+
+------------------------------------------------
+-- MAIN GUI
+------------------------------------------------
+
 local Main = Instance.new("Frame")
 Main.Parent = ScreenGui
 Main.Size = UDim2.new(0,240,0,120)
 Main.Position = UDim2.new(0.35,0,0.3,0)
 Main.BackgroundColor3 = Color3.fromRGB(255,105,180)
 Main.BorderSizePixel = 0
+Main.Visible = false
 Main.Active = true
 Main.Draggable = true
 
 Instance.new("UICorner", Main).CornerRadius = UDim.new(0,18)
 
--- TITLE
 local Title = Instance.new("TextLabel")
 Title.Parent = Main
 Title.Size = UDim2.new(1,0,0,35)
@@ -80,10 +132,30 @@ Mini.Draggable = true
 
 Instance.new("UICorner", Mini).CornerRadius = UDim.new(1,0)
 
--- DÁN ẢNH Ở ĐÂY
+-- ẢNH ICON
 Mini.Image = "rbxassetid://135283977825181"
 
--- MINIMIZE FUNCTION
+------------------------------------------------
+-- FUNCTIONS
+------------------------------------------------
+
+CheckButton.MouseButton1Click:Connect(function()
+
+	if KeyBox.Text == CorrectKey then
+
+		KeyFrame.Visible = false
+		Main.Visible = true
+
+	else
+
+		CheckButton.Text = "WRONG KEY"
+
+		task.wait(1)
+
+		CheckButton.Text = "CHECK KEY"
+	end
+end)
+
 Minimize.MouseButton1Click:Connect(function()
 
 	Main.Visible = false
@@ -96,7 +168,6 @@ Mini.MouseButton1Click:Connect(function()
 	Mini.Visible = false
 end)
 
--- TOGGLE FUNCTION
 Toggle.MouseButton1Click:Connect(function()
 
 	AutoX2Buff = not AutoX2Buff
@@ -115,66 +186,10 @@ Toggle.MouseButton1Click:Connect(function()
 	end
 end)
 
--- MOBILE DRAG FIX
-local dragging
-local dragInput
-local dragStart
-local startPos
+------------------------------------------------
+-- AUTO x2
+------------------------------------------------
 
-local function Dragify(Frame)
-
-	Frame.InputBegan:Connect(function(input)
-
-		if input.UserInputType == Enum.UserInputType.Touch
-		or input.UserInputType == Enum.UserInputType.MouseButton1 then
-
-			dragging = true
-			dragStart = input.Position
-			startPos = Frame.Position
-
-			input.Changed:Connect(function()
-
-				if input.UserInputState ==
-					Enum.UserInputState.End then
-
-					dragging = false
-				end
-			end)
-		end
-	end)
-
-	Frame.InputChanged:Connect(function(input)
-
-		if input.UserInputType ==
-			Enum.UserInputType.Touch
-		or input.UserInputType ==
-			Enum.UserInputType.MouseMovement then
-
-			dragInput = input
-		end
-	end)
-
-	UserInputService.InputChanged:Connect(function(input)
-
-		if input == dragInput and dragging then
-
-			local delta =
-				input.Position - dragStart
-
-			Frame.Position = UDim2.new(
-				startPos.X.Scale,
-				startPos.X.Offset + delta.X,
-				startPos.Y.Scale,
-				startPos.Y.Offset + delta.Y
-			)
-		end
-	end)
-end
-
-Dragify(Main)
-Dragify(Mini)
-
--- AUTO x2 BUFF
 task.spawn(function()
 
 	while task.wait(2) do
@@ -203,3 +218,4 @@ task.spawn(function()
 end)
 
 print("MIU HUB Loaded")
+print("KEY:", CorrectKey)
