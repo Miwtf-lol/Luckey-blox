@@ -1,11 +1,9 @@
---// MIU HUB - Auto x2 Buff + Key System
+--// MIU HUB - Auto x5 Buff + Key System
 --// Mobile + PC
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
-local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -14,20 +12,22 @@ local BuffRemote = ReplicatedStorage.Shared.Packages.Network.rev_TaviMishkal
 
 -- KEY CONFIG
 local CorrectKey = "0d3a507d-3357-42b5-8f91-50dc76392cae"
-local KeyLink = "https://link-center.net/3814834/B4mG9jxdJQOV"
+local KeyLink = "https://link-center.net/3814834/2Ec5lRYpE96o"
 local KEY_EXPIRY_HOURS = 24
 local KeyStorage = "MIU_HUB_KEY_DATA"
 
 -- SETTINGS
-local AutoX2Buff = false
+local AutoX5Buff = false
 
 -- GUI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MIU_HUB"
-ScreenGui.Parent = game.CoreGui
+pcall(function()
+	ScreenGui.Parent = game.CoreGui
+end)
 
 ------------------------------------------------
--- LOADING GUI (Chỉ bảng hồng, ko có nền đen)
+-- LOADING GUI
 ------------------------------------------------
 
 local LoadingBG = Instance.new("Frame")
@@ -36,7 +36,6 @@ LoadingBG.Size = UDim2.new(0,350,0,200)
 LoadingBG.Position = UDim2.new(0.5,-175,0.5,-100)
 LoadingBG.BackgroundColor3 = Color3.fromRGB(255,105,180)
 LoadingBG.BorderSizePixel = 0
-LoadingBG.ZIndex = 100
 
 Instance.new("UICorner", LoadingBG).CornerRadius = UDim.new(0,20)
 
@@ -49,41 +48,24 @@ LoadingTitle.Text = "🔑 MIU HUB"
 LoadingTitle.Font = Enum.Font.GothamBold
 LoadingTitle.TextSize = 28
 LoadingTitle.TextColor3 = Color3.new(1,1,1)
-LoadingTitle.ZIndex = 101
 
-local LoadingSubTitle = Instance.new("TextLabel")
-LoadingSubTitle.Parent = LoadingBG
-LoadingSubTitle.Size = UDim2.new(1,0,0,25)
-LoadingSubTitle.Position = UDim2.new(0,0,0.28,0)
-LoadingSubTitle.BackgroundTransparency = 1
-LoadingSubTitle.Text = "Loading..."
-LoadingSubTitle.Font = Enum.Font.Gotham
-LoadingSubTitle.TextSize = 16
-LoadingSubTitle.TextColor3 = Color3.fromRGB(255,255,200)
-LoadingSubTitle.ZIndex = 101
+local LoadingBarBG = Instance.new("Frame")
+LoadingBarBG.Parent = LoadingBG
+LoadingBarBG.Size = UDim2.new(0.8,0,0,20)
+LoadingBarBG.Position = UDim2.new(0.1,0,0.55,0)
+LoadingBarBG.BackgroundColor3 = Color3.fromRGB(60,30,50)
+LoadingBarBG.BorderSizePixel = 0
 
--- Thanh loading
-local BarContainer = Instance.new("Frame")
-BarContainer.Parent = LoadingBG
-BarContainer.Size = UDim2.new(0.8,0,0,20)
-BarContainer.Position = UDim2.new(0.1,0,0.55,0)
-BarContainer.BackgroundColor3 = Color3.fromRGB(60,30,50)
-BarContainer.BorderSizePixel = 0
-BarContainer.ClipsDescendants = true
-BarContainer.ZIndex = 101
-
-Instance.new("UICorner", BarContainer).CornerRadius = UDim.new(0,10)
+Instance.new("UICorner", LoadingBarBG).CornerRadius = UDim.new(0,10)
 
 local LoadingBar = Instance.new("Frame")
-LoadingBar.Parent = BarContainer
+LoadingBar.Parent = LoadingBarBG
 LoadingBar.Size = UDim2.new(0,0,1,0)
 LoadingBar.BackgroundColor3 = Color3.fromRGB(50,220,100)
 LoadingBar.BorderSizePixel = 0
-LoadingBar.ZIndex = 102
 
 Instance.new("UICorner", LoadingBar).CornerRadius = UDim.new(0,10)
 
--- Label phần trăm
 local PercentLabel = Instance.new("TextLabel")
 PercentLabel.Parent = LoadingBG
 PercentLabel.Size = UDim2.new(1,0,0,30)
@@ -93,75 +75,21 @@ PercentLabel.Text = "0%"
 PercentLabel.Font = Enum.Font.GothamBold
 PercentLabel.TextSize = 24
 PercentLabel.TextColor3 = Color3.new(1,1,1)
-PercentLabel.ZIndex = 101
-
-local LoadingStatus = Instance.new("TextLabel")
-LoadingStatus.Parent = LoadingBG
-LoadingStatus.Size = UDim2.new(1,0,0,20)
-LoadingStatus.Position = UDim2.new(0,0,0.88,0)
-LoadingStatus.BackgroundTransparency = 1
-LoadingStatus.Text = "Initializing..."
-LoadingStatus.Font = Enum.Font.Gotham
-LoadingStatus.TextSize = 13
-LoadingStatus.TextColor3 = Color3.fromRGB(200,200,200)
-LoadingStatus.ZIndex = 101
 
 ------------------------------------------------
--- LOADING ANIMATION
+-- LOADING
 ------------------------------------------------
 
-local loadingSteps = {
-	{Percent = 5,  Status = "Loading script modules..."},
-	{Percent = 10, Status = "Verifying dependencies..."},
-	{Percent = 18, Status = "Initializing GUI system..."},
-	{Percent = 25, Status = "Building interface elements..."},
-	{Percent = 33, Status = "Configuring key system..."},
-	{Percent = 40, Status = "Loading network remotes..."},
-	{Percent = 50, Status = "Checking saved keys..."},
-	{Percent = 58, Status = "Preparing auto-farm modules..."},
-	{Percent = 65, Status = "Setting up event handlers..."},
-	{Percent = 73, Status = "Optimizing performance..."},
-	{Percent = 80, Status = "Finalizing UI components..."},
-	{Percent = 88, Status = "Running security checks..."},
-	{Percent = 95, Status = "Almost done..."},
-	{Percent = 100, Status = "✅ MIU HUB Loaded!"},
-}
-
-local function RunLoadingAnimation()
-	for _, step in ipairs(loadingSteps) do
-		local targetPercent = step.Percent
-		local startPercent = 0
-		
-		local currentBar = LoadingBar.Size.X.Offset
-		local currentWidth = BarContainer.AbsoluteSize.X
-		if currentWidth > 0 then
-			startPercent = math.floor((currentBar / currentWidth) * 100)
-		end
-		
-		local stepsToReach = math.max(1, math.floor((targetPercent - startPercent) / 2))
-		for i = 1, stepsToReach do
-			local progress = i / stepsToReach
-			local currentP = startPercent + (targetPercent - startPercent) * progress
-			local barWidth = (currentP / 100) * BarContainer.AbsoluteSize.X
-			
-			LoadingBar.Size = UDim2.new(0, barWidth, 1, 0)
-			PercentLabel.Text = math.floor(currentP) .. "%"
-			LoadingStatus.Text = step.Status
-			
-			task.wait(0.03)
-		end
-		
-		LoadingBar.Size = UDim2.new(0, (targetPercent / 100) * BarContainer.AbsoluteSize.X, 1, 0)
-		PercentLabel.Text = targetPercent .. "%"
-		LoadingStatus.Text = step.Status
-		
-		if targetPercent < 100 then
-			task.wait(0.08)
-		else
-			task.wait(0.5)
-		end
+task.spawn(function()
+	for i = 1,100 do
+		LoadingBar.Size = UDim2.new(i/100,0,1,0)
+		PercentLabel.Text = i.."%"
+		task.wait(0.02)
 	end
-end
+	
+	task.wait(0.5)
+	LoadingBG:Destroy()
+end)
 
 ------------------------------------------------
 -- KEY GUI
@@ -174,7 +102,7 @@ KeyFrame.Position = UDim2.new(0.5,-160,0.3,0)
 KeyFrame.BackgroundColor3 = Color3.fromRGB(255,105,180)
 KeyFrame.Active = true
 KeyFrame.Draggable = true
-KeyFrame.Visible = false  -- Ẩn cho tới khi loading xong
+KeyFrame.Visible = false
 
 Instance.new("UICorner", KeyFrame).CornerRadius = UDim.new(0,18)
 
@@ -183,7 +111,7 @@ KeyTitle.Parent = KeyFrame
 KeyTitle.Size = UDim2.new(1,0,0,35)
 KeyTitle.Position = UDim2.new(0,0,0.02,0)
 KeyTitle.BackgroundTransparency = 1
-KeyTitle.Text = "🔑 MIU HUB KEY SYSTEM"
+KeyTitle.Text = "🔑 MIU HUB KEY"
 KeyTitle.Font = Enum.Font.GothamBold
 KeyTitle.TextSize = 22
 KeyTitle.TextColor3 = Color3.new(1,1,1)
@@ -234,16 +162,6 @@ CheckButton.TextColor3 = Color3.new(1,1,1)
 
 Instance.new("UICorner", CheckButton).CornerRadius = UDim.new(0,14)
 
-local ExpiryLabel = Instance.new("TextLabel")
-ExpiryLabel.Parent = KeyFrame
-ExpiryLabel.Size = UDim2.new(1,0,0,18)
-ExpiryLabel.Position = UDim2.new(0,0,0.92,0)
-ExpiryLabel.BackgroundTransparency = 1
-ExpiryLabel.Text = "Key expires in: 24h"
-ExpiryLabel.Font = Enum.Font.Gotham
-ExpiryLabel.TextSize = 12
-ExpiryLabel.TextColor3 = Color3.fromRGB(255,200,200)
-
 ------------------------------------------------
 -- MAIN GUI
 ------------------------------------------------
@@ -253,7 +171,6 @@ Main.Parent = ScreenGui
 Main.Size = UDim2.new(0,240,0,120)
 Main.Position = UDim2.new(0.35,0,0.3,0)
 Main.BackgroundColor3 = Color3.fromRGB(255,105,180)
-Main.BorderSizePixel = 0
 Main.Visible = false
 Main.Active = true
 Main.Draggable = true
@@ -286,7 +203,7 @@ Toggle.Parent = Main
 Toggle.Size = UDim2.new(0.8,0,0,45)
 Toggle.Position = UDim2.new(0.1,0,0.5,0)
 Toggle.BackgroundColor3 = Color3.fromRGB(255,130,200)
-Toggle.Text = "AUTO x2 : OFF"
+Toggle.Text = "AUTO x5 : OFF"
 Toggle.TextColor3 = Color3.new(1,1,1)
 Toggle.Font = Enum.Font.GothamBold
 Toggle.TextSize = 20
@@ -307,140 +224,96 @@ Instance.new("UICorner", Mini).CornerRadius = UDim.new(1,0)
 Mini.Image = "rbxassetid://135283977825181"
 
 ------------------------------------------------
--- KEY MANAGEMENT FUNCTIONS
+-- KEY FUNCTIONS
 ------------------------------------------------
 
 local function IsKeyValid(savedData)
-	if not savedData then return false end
-	
-	local success, decoded = pcall(HttpService.JSONDecode, HttpService, savedData)
-	if not success or not decoded.Key or not decoded.Timestamp then return false end
-	
-	local elapsed = os.time() - decoded.Timestamp
-	local expirySeconds = KEY_EXPIRY_HOURS * 60 * 60
-	
-	if elapsed >= expirySeconds then return false end
-	
-	return decoded.Key == CorrectKey, decoded
-end
-
-local function UpdateExpiryDisplay(decoded)
-	if decoded and decoded.Timestamp then
-		local elapsed = os.time() - decoded.Timestamp
-		local remaining = (KEY_EXPIRY_HOURS * 60 * 60) - elapsed
-		local hours = math.floor(remaining / 3600)
-		local minutes = math.floor((remaining % 3600) / 60)
-		ExpiryLabel.Text = string.format("⏱ Key expires in: %dh %dm", hours, minutes)
-	else
-		ExpiryLabel.Text = "⏱ Key expires in: 24h"
+	if not savedData then
+		return false
 	end
+
+	local success, decoded = pcall(function()
+		return HttpService:JSONDecode(savedData)
+	end)
+
+	if not success then
+		return false
+	end
+
+	local elapsed = os.time() - decoded.Timestamp
+
+	if elapsed >= (KEY_EXPIRY_HOURS * 3600) then
+		return false
+	end
+
+	return decoded.Key == CorrectKey
 end
 
-------------------------------------------------
--- HÀM HIỆN MAIN GUI (dùng chung)
-------------------------------------------------
-
-local function ShowMainGUI(data)
+local function ShowMain()
 	KeyFrame.Visible = false
 	Main.Visible = true
-	
-	if data then
-		UpdateExpiryDisplay(data)
-	end
-	
-	-- Auto update expiry mỗi phút
-	task.spawn(function()
-		while Main.Visible do
-			task.wait(60)
-			local obj = game.CoreGui:FindFirstChild(KeyStorage)
-			if obj then
-				local v, d = IsKeyValid(obj.Value)
-				if v then
-					UpdateExpiryDisplay(d)
-				end
-			end
-		end
-	end)
 end
 
 ------------------------------------------------
--- GETKEY BUTTON
+-- GET KEY BUTTON
 ------------------------------------------------
 
 GetKeyButton.MouseButton1Click:Connect(function()
 	local success = false
-	if pcall(function()
+
+	pcall(function()
 		setclipboard(KeyLink)
-	end) then
 		success = true
-	end
-	
+	end)
+
 	if success then
-		KeyBox.Text = CorrectKey
-		
-		local data = {
-			Key = CorrectKey,
-			Timestamp = os.time()
-		}
-		local jsonData = HttpService:JSONEncode(data)
-		
-		local old = game.CoreGui:FindFirstChild(KeyStorage)
-		if old then old:Destroy() end
-		
-		local saved = Instance.new("StringValue")
-		saved.Name = KeyStorage
-		saved.Value = jsonData
-		saved.Parent = game.CoreGui
-		
-		StatusLabel.Text = "✅ Link copied! Key auto-filled & saved!"
-		GetKeyButton.Text = "✅ READY!"
-		task.wait(1)
-		
-		-- Tự động chuyển sang Main GUI sau khi GET KEY
-		ShowMainGUI(data)
+		StatusLabel.Text = "✅ Link copied!"
+		GetKeyButton.Text = "✅ COPIED"
+
+		task.wait(1.5)
+
+		GetKeyButton.Text = "📋 GET KEY"
 	else
-		StatusLabel.Text = "⚠️ Cannot copy (executor limited)"
-		GetKeyButton.Text = KeyLink
+		StatusLabel.Text = "❌ Clipboard unsupported"
 	end
 end)
 
 ------------------------------------------------
--- CHECK KEY BUTTON
+-- CHECK KEY
 ------------------------------------------------
 
 CheckButton.MouseButton1Click:Connect(function()
-	local inputKey = KeyBox.Text
-	
-	if inputKey == CorrectKey then
-		local data = {
-			Key = inputKey,
+	if KeyBox.Text == CorrectKey then
+		
+		local saveData = {
+			Key = CorrectKey,
 			Timestamp = os.time()
 		}
-		local jsonData = HttpService:JSONEncode(data)
-		
+
+		local json = HttpService:JSONEncode(saveData)
+
 		local old = game.CoreGui:FindFirstChild(KeyStorage)
-		if old then old:Destroy() end
-		
-		local saved = Instance.new("StringValue")
-		saved.Name = KeyStorage
-		saved.Value = jsonData
-		saved.Parent = game.CoreGui
-		
-		ShowMainGUI(data)
-		
-		StatusLabel.Text = ""
+		if old then
+			old:Destroy()
+		end
+
+		local value = Instance.new("StringValue")
+		value.Name = KeyStorage
+		value.Value = json
+		value.Parent = game.CoreGui
+
+		ShowMain()
 	else
-		CheckButton.Text = "❌ WRONG KEY"
-		StatusLabel.Text = "❌ Invalid key! Get the correct one"
-		
+		StatusLabel.Text = "❌ Wrong Key"
+
 		task.wait(1.5)
-		
-		CheckButton.Text = "✅ CHECK KEY"
+
+		StatusLabel.Text = ""
 	end
 end)
 
 ------------------------------------------------
--- MINIMIZE / RESTORE
+-- MINIMIZE
 ------------------------------------------------
 
 Minimize.MouseButton1Click:Connect(function()
@@ -454,37 +327,38 @@ Mini.MouseButton1Click:Connect(function()
 end)
 
 ------------------------------------------------
--- TOGGLE AUTO X2
+-- TOGGLE AUTO x5
 ------------------------------------------------
 
 Toggle.MouseButton1Click:Connect(function()
-	AutoX2Buff = not AutoX2Buff
+	AutoX5Buff = not AutoX5Buff
 
-	if AutoX2Buff then
-		Toggle.Text = "AUTO x2 : ON"
+	if AutoX5Buff then
+		Toggle.Text = "AUTO x5 : ON"
 		Toggle.BackgroundColor3 = Color3.fromRGB(255,80,170)
 	else
-		Toggle.Text = "AUTO x2 : OFF"
+		Toggle.Text = "AUTO x5 : OFF"
 		Toggle.BackgroundColor3 = Color3.fromRGB(255,130,200)
 	end
 end)
 
 ------------------------------------------------
--- AUTO x2 LOOP (0.2 GIÂY)
+-- AUTO x5 LOOP
 ------------------------------------------------
 
 task.spawn(function()
 	while task.wait(0.2) do
-		if AutoX2Buff then
+		if AutoX5Buff then
 			local Character = LocalPlayer.Character
 
 			if Character then
-				local Tool =
-					Character:FindFirstChildOfClass("Tool")
+				local Tool = Character:FindFirstChildOfClass("Tool")
 
 				if Tool then
 					pcall(function()
-						BuffRemote:FireServer()
+						for i = 1,5 do
+							BuffRemote:FireServer()
+						end
 					end)
 				end
 			end
@@ -493,37 +367,17 @@ task.spawn(function()
 end)
 
 ------------------------------------------------
--- CHẠY LOADING -> ẨN BẢNG HỒNG -> HIỆN KEY GUI
+-- START
 ------------------------------------------------
 
-task.spawn(function()
-	RunLoadingAnimation()
-	
-	-- Ẩn bảng hồng
-	LoadingBG.Visible = false
-	LoadingBG:Destroy()
-	
-	-- Kiểm tra key đã lưu
-	local savedValue
-	local savedObj = game.CoreGui:FindFirstChild(KeyStorage)
-	if savedObj then
-		savedValue = savedObj.Value
-	end
-	
-	if savedValue then
-		local valid, decoded = IsKeyValid(savedValue)
-		if valid then
-			-- Key hợp lệ -> bỏ qua key GUI, hiện thẳng Main
-			ShowMainGUI(decoded)
-			return
-		end
-	end
-	
-	-- Không có key hoặc key hết hạn -> hiện bảng GET KEY
+task.wait(3)
+
+local savedObj = game.CoreGui:FindFirstChild(KeyStorage)
+
+if savedObj and IsKeyValid(savedObj.Value) then
+	ShowMain()
+else
 	KeyFrame.Visible = true
-end)
+end
 
 print("MIU HUB Loaded")
-print("Correct Key:", CorrectKey)
-print("Get Key at:", KeyLink)
-print("Key expires after:", KEY_EXPIRY_HOURS, "hours")
