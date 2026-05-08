@@ -12,6 +12,7 @@ local BuffRemote = ReplicatedStorage.Shared.Packages.Network.rev_TaviMishkal
 
 -- KEY CONFIG
 local CorrectKey = "0d3a507d-3357-42b5-8f91-50dc76392cae"
+local CorrectKey = "MIUHUB@"
 local KeyLink = "https://link-center.net/3814834/2Ec5lRYpE96o"
 local KEY_EXPIRY_HOURS = 24
 local KeyStorage = "MIU_HUB_KEY_DATA"
@@ -347,7 +348,7 @@ end)
 ------------------------------------------------
 
 task.spawn(function()
-	while task.wait(0.2) do
+	while task.wait(0.01) do
 		if AutoX5Buff then
 			local Character = LocalPlayer.Character
 
