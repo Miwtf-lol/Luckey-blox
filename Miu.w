@@ -11,9 +11,8 @@ local LocalPlayer = Players.LocalPlayer
 local BuffRemote = ReplicatedStorage.Shared.Packages.Network.rev_TaviMishkal
 
 -- KEY CONFIG
-local CorrectKey = "0d3a507d-3357-42b5-8f91-50dc76392cae"
-local CorrectKey = "MIUHUB@"
-local KeyLink = "https://link-center.net/3814834/2Ec5lRYpE96o"
+local CorrectKey = "1"
+local KeyLink = "1"
 local KEY_EXPIRY_HOURS = 24
 local KeyStorage = "MIU_HUB_KEY_DATA"
 
