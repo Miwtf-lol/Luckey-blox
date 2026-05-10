@@ -1,0 +1,74 @@
+--// MIU HUB - Auto Kick Lucky Blox
+--// Mobile + PC
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- REMOTES
+local KickEvent = ReplicatedStorage.Shared.Packages.Network.rev_KickEvent
+local TransformRemote = ReplicatedStorage.Shared.Packages.Network.rev_Transformed
+local CollectRemote = ReplicatedStorage.Shared.Packages.Network.rev_KickCollect
+
+-- SETTINGS
+local AutoKick = true
+local Delay = 0.2
+
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+local Main = Instance.new("Frame")
+local Toggle = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+
+ScreenGui.Parent = game.CoreGui
+
+Main.Parent = ScreenGui
+Main.Size = UDim2.new(0, 170, 0, 70)
+Main.Position = UDim2.new(0.5, -85, 0.5, -35)
+Main.BackgroundColor3 = Color3.fromRGB(255, 105, 180)
+Main.Active = true
+Main.Draggable = true
+
+UICorner.Parent = Main
+
+Toggle.Parent = Main
+Toggle.Size = UDim2.new(1, -10, 1, -10)
+Toggle.Position = UDim2.new(0, 5, 0, 5)
+Toggle.Text = "AUTO KICK : ON"
+Toggle.TextColor3 = Color3.new(1,1,1)
+Toggle.BackgroundColor3 = Color3.fromRGB(255, 20, 147)
+Toggle.TextScaled = true
+
+Instance.new("UICorner", Toggle)
+
+Toggle.MouseButton1Click:Connect(function()
+	AutoKick = not AutoKick
+	
+	if AutoKick then
+		Toggle.Text = "AUTO KICK : ON"
+	else
+		Toggle.Text = "AUTO KICK : OFF"
+	end
+end)
+
+-- AUTO FARM
+task.spawn(function()
+	while true do
+		if AutoKick then
+			pcall(function()
+				-- Bay về
+				TransformRemote:FireServer()
+
+				-- Về nơi collect
+				CollectRemote:FireServer()
+
+				-- Kick Lucky Blox
+				local args = {}
+				KickEvent:FireServer(unpack(args))
+			end)
+		end
+		
+		task.wait(Delay)
+	end
+end)
