@@ -1,10 +1,12 @@
---// MIU HUB - Auto Kick Lucky Blox
+--// MIU HUB - AUTO KICK + AUTO TELE
 --// Mobile + PC
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- REMOTES
 local KickEvent = ReplicatedStorage.Shared.Packages.Network.rev_KickEvent
@@ -12,33 +14,34 @@ local TransformRemote = ReplicatedStorage.Shared.Packages.Network.rev_Transforme
 local CollectRemote = ReplicatedStorage.Shared.Packages.Network.rev_KickCollect
 
 -- SETTINGS
-local AutoKick = true
-local Delay = 0.2
+local AutoKick = false
+
+-- TELE POSITION (đổi nếu cần)
+local KickPos = Vector3.new(0, 15, 0)
 
 -- GUI
 local ScreenGui = Instance.new("ScreenGui")
 local Main = Instance.new("Frame")
 local Toggle = Instance.new("TextButton")
-local UICorner = Instance.new("UICorner")
 
 ScreenGui.Parent = game.CoreGui
 
 Main.Parent = ScreenGui
-Main.Size = UDim2.new(0, 170, 0, 70)
-Main.Position = UDim2.new(0.5, -85, 0.5, -35)
-Main.BackgroundColor3 = Color3.fromRGB(255, 105, 180)
+Main.Size = UDim2.new(0,170,0,70)
+Main.Position = UDim2.new(0.5,-85,0.5,-35)
+Main.BackgroundColor3 = Color3.fromRGB(255,105,180)
 Main.Active = true
 Main.Draggable = true
 
-UICorner.Parent = Main
+Instance.new("UICorner", Main)
 
 Toggle.Parent = Main
-Toggle.Size = UDim2.new(1, -10, 1, -10)
-Toggle.Position = UDim2.new(0, 5, 0, 5)
-Toggle.Text = "AUTO KICK : ON"
-Toggle.TextColor3 = Color3.new(1,1,1)
-Toggle.BackgroundColor3 = Color3.fromRGB(255, 20, 147)
+Toggle.Size = UDim2.new(1,-10,1,-10)
+Toggle.Position = UDim2.new(0,5,0,5)
+Toggle.Text = "AUTO KICK : OFF"
 Toggle.TextScaled = true
+Toggle.TextColor3 = Color3.new(1,1,1)
+Toggle.BackgroundColor3 = Color3.fromRGB(255,20,147)
 
 Instance.new("UICorner", Toggle)
 
@@ -52,23 +55,33 @@ Toggle.MouseButton1Click:Connect(function()
 	end
 end)
 
--- AUTO FARM
+-- AUTO
 task.spawn(function()
 	while true do
 		if AutoKick then
 			pcall(function()
-				-- Bay về
+
+				-- TELE TỚI CHỖ KICK
+				HumanoidRootPart.CFrame = CFrame.new(KickPos)
+
+				task.wait(1)
+
+				-- KICK
+				KickEvent:FireServer()
+
+				task.wait(1)
+
+				-- BAY VỀ
 				TransformRemote:FireServer()
 
-				-- Về nơi collect
+				task.wait(1)
+
+				-- VỀ COLLECT ZONE
 				CollectRemote:FireServer()
 
-				-- Kick Lucky Blox
-				local args = {}
-				KickEvent:FireServer(unpack(args))
 			end)
 		end
-		
-		task.wait(Delay)
+
+		task.wait(5)
 	end
 end)
