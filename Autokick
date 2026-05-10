@@ -1,87 +1,155 @@
---// MIU HUB - AUTO KICK + AUTO TELE
---// Mobile + PC
+--[[
+Lucky Blox Auto Farm Script
+Tự động bay đến COLLECT ZONE, kick, và quay về
+]]
 
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
+local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
--- REMOTES
-local KickEvent = ReplicatedStorage.Shared.Packages.Network.rev_KickEvent
-local TransformRemote = ReplicatedStorage.Shared.Packages.Network.rev_Transformed
-local CollectRemote = ReplicatedStorage.Shared.Packages.Network.rev_KickCollect
+-- Anti-Kick Protection
+local mt = getrawmetatable(game)
+local old_namecall = mt.__namecall
+setreadonly(mt, false)
 
--- SETTINGS
-local AutoKick = false
-
--- TELE POSITION (đổi nếu cần)
-local KickPos = Vector3.new(0, 15, 0)
-
--- GUI
-local ScreenGui = Instance.new("ScreenGui")
-local Main = Instance.new("Frame")
-local Toggle = Instance.new("TextButton")
-
-ScreenGui.Parent = game.CoreGui
-
-Main.Parent = ScreenGui
-Main.Size = UDim2.new(0,170,0,70)
-Main.Position = UDim2.new(0.5,-85,0.5,-35)
-Main.BackgroundColor3 = Color3.fromRGB(255,105,180)
-Main.Active = true
-Main.Draggable = true
-
-Instance.new("UICorner", Main)
-
-Toggle.Parent = Main
-Toggle.Size = UDim2.new(1,-10,1,-10)
-Toggle.Position = UDim2.new(0,5,0,5)
-Toggle.Text = "AUTO KICK : OFF"
-Toggle.TextScaled = true
-Toggle.TextColor3 = Color3.new(1,1,1)
-Toggle.BackgroundColor3 = Color3.fromRGB(255,20,147)
-
-Instance.new("UICorner", Toggle)
-
-Toggle.MouseButton1Click:Connect(function()
-	AutoKick = not AutoKick
-	
-	if AutoKick then
-		Toggle.Text = "AUTO KICK : ON"
-	else
-		Toggle.Text = "AUTO KICK : OFF"
-	end
+mt.__namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    
+    -- Block kick events
+    if method == "FireServer" and tostring(self):find("KickEvent") then
+        return -- Block the kick
+    end
+    
+    -- Block RemoteEvents/RemoteFunctions that kick
+    if method == "FireServer" and tostring(self):find("rev_Kick") then
+        return -- Block kick remotes
+    end
+    
+    return old_namecall(self, ...)
 end)
 
--- AUTO
-task.spawn(function()
-	while true do
-		if AutoKick then
-			pcall(function()
+setreadonly(mt, true)
 
-				-- TELE TỚI CHỖ KICK
-				HumanoidRootPart.CFrame = CFrame.new(KickPos)
+-- Auto Farm Variables
+local isFarming = false
+local farmConnection = nil
 
-				task.wait(1)
+-- Functions
+function getCollectZone()
+    -- Tìm COLLECT ZONE - điều chỉnh theo map
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v.Name:lower():find("collect") or v.Name:lower():find("zone") then
+            return v
+        end
+    end
+    return nil
+end
 
-				-- KICK
-				KickEvent:FireServer()
+function flyTo(position)
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return false
+    end
+    
+    local hrp = character.HumanoidRootPart
+    hrp.CFrame = CFrame.new(position)
+    
+    -- Gửi sự kiện biến đổi/bay
+    pcall(function()
+        ReplicatedStorage.Shared.Packages.Network.rev_Transformed:FireServer()
+    end)
+    
+    return true
+end
 
-				task.wait(1)
+function collectZone()
+    local zone = getCollectZone()
+    if zone then
+        flyTo(zone.Position + Vector3.new(0, 5, 0))
+        
+        -- Fire collect event
+        pcall(function()
+            ReplicatedStorage.Shared.Packages.Network.rev_KickCollect:FireServer()
+        end)
+        
+        return true
+    end
+    return false
+end
 
-				-- BAY VỀ
-				TransformRemote:FireServer()
+function autoKick()
+    -- Auto kick và chọn cái cao nhất
+    local args = {
+        [1] = "Highest Value",  -- Hoặc giá trị tương ứng
+        -- Thêm các args cần thiết khác
+    }
+    
+    pcall(function()
+        ReplicatedStorage.Shared.Packages.Network.rev_KickEvent:FireServer(unpack(args))
+    end)
+    
+    -- Delay ngắn trước khi bay về
+    task.wait(0.5)
+    
+    -- Bay về COLLECT ZONE
+    collectZone()
+end
 
-				task.wait(1)
+-- Main Loop
+function startFarming()
+    isFarming = true
+    
+    -- Bay đến COLLECT ZONE
+    collectZone()
+    
+    -- Tạo loop auto kick
+    farmConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if not isFarming then
+            farmConnection:Disconnect()
+            return
+        end
+        
+        -- Auto kick
+        autoKick()
+        
+        -- Delay giữa các lần kick
+        task.wait(2)
+    end)
+end
 
-				-- VỀ COLLECT ZONE
-				CollectRemote:FireServer()
+function stopFarming()
+    isFarming = false
+    if farmConnection then
+        farmConnection:Disconnect()
+        farmConnection = nil
+    end
+end
 
-			end)
-		end
+-- UI Toggle
+local GUI = Instance.new("ScreenGui")
+local Button = Instance.new("TextButton")
 
-		task.wait(5)
-	end
+GUI.Parent = LocalPlayer:WaitForChild("PlayerGui")
+Button.Parent = GUI
+Button.Size = UDim2.new(0, 200, 0, 50)
+Button.Position = UDim2.new(0, 50, 0, 50)
+Button.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+Button.Text = "Start Farm"
+Button.FontSize = Enum.FontSize.Size24
+
+Button.MouseButton1Click:Connect(function()
+    if isFarming then
+        stopFarming()
+        Button.Text = "Start Farm"
+        Button.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    else
+        startFarming()
+        Button.Text = "Stop Farm"
+        Button.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    end
 end)
+
+-- Notify
+print("Lucky Blox Auto Farm Script Loaded!")
